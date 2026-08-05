@@ -4,6 +4,18 @@ Accessibility tools HTML websites.
 
 Pressing and releasing **Ctrl** (tap without any combo key) shows keyboard shortcut hints for all currently interactive elements. Pressing any other key, clicking, scrolling with the mouse, or any non-hover mouse event hides them. While hints are visible, **arrow keys** scroll the active scroller without hiding the hints.
 
+## Screenreaders
+
+Screenreaders follow the application flow and are mostly unaffected since the natural flow of html allows for the usage of screenreaders easily.
+
+De-aria however enforces the idea that visible elements should be focuseable, which creates an "outline" where you can see what it is actually reading at a time; all 
+
+## Physically disabled
+
+This is where most of the de-aria design comes into play, it enables a pattern where voice commands can be issue for those with intact or mostly intact vision but physical disability that prevents them from using the mouse or both the mouse and keyboard.
+
+You can test with a voice driven accessibility suite, eg. like Talon.
+
 ---
 
 ## Usage
@@ -13,6 +25,10 @@ Pressing and releasing **Ctrl** (tap without any combo key) shows keyboard short
 ```
 
 Import the script as an ES module. No framework or build step required.
+
+## Use With `inert=true`
+
+de-aria is inert sensitive and you are supposed to use it with such property to take advantage of its full fledged functionality, check out the inert html property to see what it does.
 
 ---
 
@@ -24,9 +40,11 @@ These are the attributes you place on your own elements to control behaviour. Al
 
 Marks an element as text, meant to be tabbed and read only, not interacted with. This is for elements that are focusable but shouldn't be triggered by key presses, for example a custom dropdown built with a `<details>` element where the summary should be focused but not "clicked" when the user presses the key.
 
+Should be added with tabindex="0" for it to function properly, screen-readers will correctly read this as a textual element.
+
 ```html
 <details>
-    <summary data-de-aria-text="true">Choose an option</summary>
+    <summary data-de-aria-text="true" tabindex="0">Choose an option</summary>
     <ul>
         <li><a href="/option1" data-de-aria-key="1">Option 1</a></li>
         <li><a href="/option2" data-de-aria-key="2">Option 2</a></li>
