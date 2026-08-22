@@ -1,0 +1,20 @@
+{
+  "name": "de-aria",
+  "version": "1.0.0",
+  "description": "Accessibility tools for plain HTML websites",
+  "homepage": "https://github.com/otavanopisto/de-aria#readme",
+  "bugs": {
+    "url": "https://github.com/otavanopisto/de-aria/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/otavanopisto/de-aria.git"
+  },
+  "license": "MIT",
+  "author": "Edward González",
+  "type": "module",
+  "main": "js/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
