@@ -396,3 +396,7 @@ document.getElementById('app').inert = true;
 // On close: restore
 document.getElementById('app').inert = false;
 ```
+
+## Disabling Warnings
+
+Use `window.__deAriaNoWarnings = true` to disable console warnings about missing `data-de-aria-key` attributes and other non-critical issues.

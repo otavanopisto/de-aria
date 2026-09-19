@@ -219,12 +219,20 @@ function warnAboutInvalids(root) {
     }
 }
 
-function showAccessibility() {
-    warnAboutInvalids(document);
+/**
+ * 
+ * @param {HTMLElement | Document} [currentlyActiveDeAriaGroupOverride]
+ */
+function showAccessibility(currentlyActiveDeAriaGroupOverride) {
+    // @ts-ignore
+    if (!window.__deAriaNoWarnings) {
+        warnAboutInvalids(document);
+    }
 
-    showAccessibilityFocusables(document);
+    const currentlyActiveDeAriaGroup = currentlyActiveDeAriaGroupOverride || getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`) || document;
+    showAccessibilityFocusables(currentlyActiveDeAriaGroup);
 
-    const scroller = getAllElementsListBySelector(document, '[data-de-aria-role="scroller"]')
+    const scroller = getAllElementsListBySelector(currentlyActiveDeAriaGroup, '[data-de-aria-role="scroller"]')
         .find(isAccessible) || null;
 
     if (scroller) {
@@ -827,7 +835,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (accessibilityContinuesOnGroup) {
-            showAccessibilityFocusables(accessibilityContinuesOnGroup);
+            showAccessibility(accessibilityContinuesOnGroup);
         }
 
         const currentScroller = getSpecificElementBySelector(document, ".de-aria-scroll-marked");
