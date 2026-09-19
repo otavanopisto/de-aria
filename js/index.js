@@ -991,9 +991,6 @@ function ensureConsistencyOfDOM(root, info = null) {
             const expectedInert = true;
             if (el.inert !== expectedInert) {
                 el.dataset.dataDeAriaGroupOriginalInert = String(el.inert);
-                if (el.textContent === "Failed to initialize the inference adapter. Please check your API key and host configuration, and ensure that your API key has the necessary permissions.") {
-                    debugger;
-                }
                 el.inert = true;
             }
         }
@@ -1002,7 +999,6 @@ function ensureConsistencyOfDOM(root, info = null) {
     const childGroups = getAllElementsListBySelector(root, "[data-de-aria-group]", "[data-de-aria-group]");
 
     for (const group of childGroups) {
-        debugger;
         ensureConsistencyOfDOM(group, info);
     }
 }
