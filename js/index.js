@@ -174,8 +174,8 @@ function warnAboutInvalids(root) {
         if (el.dataset.deAriaGroup === "static" && el.dataset.deAriaText === "true") {
             console.warn(el, `Element ${el.tagName} has data-de-aria-group="static" but also has data-de-aria-text="true". Consider removing the data-de-aria-text attribute or setting data-de-aria-group to dynamic value.`);
         }
-        if (el.dataset.deAriaGroup && el.role !== "group") {
-            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing role="group". Consider adding role="group" to the element.`);
+        if (el.dataset.deAriaGroup && el.dataset.deAriaText !== "true" && el.role !== "group") {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing role="group" and it is not a text element with data-de-aria-text="true". Consider adding role="group" to the element.`);
         }
     }
 }
