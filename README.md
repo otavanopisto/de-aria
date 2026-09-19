@@ -267,6 +267,16 @@ A static group should not have a tabindex, since it is not meant to be focused, 
 <p data-de-aria-text="true" tabindex="0">This paragraph is also not tabbable because the focus trap is active.</p>
 ```
 
+#### Use Inert Instead of Tabindex Focus Traps
+
+Use `data-de-aria-group-use-inert` to make the library use inert instead of tabindex focus traps, this is a more robust approach to focus traps for dialogs and overlays.
+
+```html
+<div data-de-aria-group="static" data-de-aria-group-use-inert data-de-aria-group-active role="dialog">
+    <h2 data-de-aria-text="true" tabindex="0">Dialog Focus Trap</h2>
+</div>
+```
+
 #### Which group is currently active?
 
 If two groups are active, the library will use the last deepest one in the DOM tree, this allows for nested active groups.
