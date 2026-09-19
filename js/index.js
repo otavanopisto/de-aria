@@ -13,8 +13,10 @@ const FOCUSABLE_SELECTOR_NO_TABINDEX = [
 
 const FOCUSABLE_SELECTOR = FOCUSABLE_SELECTOR_NO_TABINDEX + "," + "[tabindex]";
 
+const DE_ARIA_GROUP_ROLES = new Set(["group", "dialog", "alertdialog"]);
+
 /**
- * 
+ *
  * @param {Element} el 
  * @returns {boolean}
  */
@@ -53,33 +55,77 @@ function isAccessible(el) {
  * @returns {HTMLElement[]}
  */
 function getAllElementsListBySelector(root, selector, excludeParentSelector) {
-    const foundElements = Array.from(root.querySelectorAll(selector)).filter(el => {
-        if (!excludeParentSelector) return true;
+    /** @type {HTMLElement[]} */
+    const foundElements = [];
+    const visited = new Set();
 
-        // we need to traverse up the tree to check if any of the parents match the excludeParentSelector, however the root is not included on this
-        // the root can be that excludeParentSelector, so we only traverse up to the root
-        let parent = el.parentElement;
-        while (parent && parent !== root) {
-            if (parent.matches(excludeParentSelector)) {
-                return false;
+    /**
+     * Return the children at this position in the composed tree. A host's
+     * exposed shadow root replaces its light-DOM children, and a slot is
+     * replaced by its assigned nodes (or its fallback children).
+     * @param {any} node
+     * @returns {Node[]}
+     */
+    function getComposedChildren(node) {
+        if (node?.nodeType === 1 /* ELEMENT_NODE */) {
+            const el = /** @type {HTMLElement} */ (node);
+
+            if (el.localName === "slot" && typeof /** @type {any} */ (el).assignedNodes === "function") {
+                const assignedNodes = /** @type {any} */ (el).assignedNodes({ flatten: true });
+                return assignedNodes.length ? Array.from(assignedNodes) : Array.from(el.childNodes);
             }
-            parent = parent.parentElement;
-        }
-        return true;
-    });
 
-    const elementsWithShadowRoots = root.querySelectorAll("*");
-    for (const el of elementsWithShadowRoots) {
-        if ((el.shadowRoot || el.root) && (excludeParentSelector ? !el.matches(excludeParentSelector) && !el.closest(excludeParentSelector) : true)) {
-            const foundAtShadow = getAllElementsListBySelector(el.shadowRoot || el.root, selector, excludeParentSelector);
-            foundElements.push(...foundAtShadow);
+            const exposedRoot = /** @type {any} */ (el).shadowRoot || /** @type {any} */ (el).root;
+            if (exposedRoot && exposedRoot !== el && exposedRoot.childNodes) {
+                return Array.from(exposedRoot.childNodes);
+            }
+        }
+
+        return node?.childNodes ? Array.from(node.childNodes) : [];
+    }
+
+    /**
+     * @param {Node} node
+     */
+    function visit(node) {
+        if (visited.has(node)) return;
+        visited.add(node);
+
+        if (node.nodeType !== 1 /* ELEMENT_NODE */) {
+            for (const child of getComposedChildren(node)) {
+                visit(child);
+            }
+            return;
+        }
+
+        const el = /** @type {HTMLElement} */ (node);
+
+        if (el.matches(selector)) {
+            foundElements.push(el);
+        }
+
+        const excludesChildren = Boolean(excludeParentSelector && el.matches(excludeParentSelector));
+        if (excludesChildren) return;
+
+        for (const child of getComposedChildren(el)) {
+            visit(child);
         }
     }
+
+    // The supplied root is a traversal boundary, not a candidate result or an
+    // excluded parent. This lets callers inspect inside a group while still
+    // excluding any nested groups.
+    for (const child of getComposedChildren(root)) {
+        visit(child);
+    }
+
     return foundElements;
 }
 
 /**
- * Gets a specific element by selector, piercing shadow roots. Returns the first matching element found in the DOM tree, or null if none is found.
+ * Gets a specific element by selector, piercing shadow roots. Returns the first found matching element found in the DOM tree, or null if none is found.
+ * 
+ * Order is not guaranteed against shadowroots, so if multiple elements match the selector, the first one found may be in a shadow root or in the light DOM.
  * 
  * @param {any} root 
  * @param {string} selector 
@@ -100,25 +146,17 @@ function getSpecificElementBySelector(root, selector) {
 }
 
 /**
- * Gets a specific element by selector, piercing shadow roots. Returns the last matching element found in the DOM tree, or null if none is found.
+ * Gets a specific element by selector, traversing the composed tree through
+ * exposed shadow roots and slots. Returns the last matching element in that
+ * order, or null if none is found.
  * 
  * @param {any} root 
  * @param {string} selector 
  * @returns {HTMLElement | null}
  */
 function getSpecificElementBySelectorLast(root, selector) {
-    const elementsWithShadowRoots = Array.from(root.querySelectorAll("*")).reverse();
-    for (const el of elementsWithShadowRoots) {
-        if (el.shadowRoot || el.root) {
-            const foundAtShadow = getSpecificElementBySelector(el.shadowRoot || el.root, selector);
-            if (foundAtShadow) return foundAtShadow;
-        }
-    }
-
-    const foundHere = root.querySelector(selector);
-    if (foundHere) return foundHere;
-    
-    return null;
+    const matchingElements = getAllElementsListBySelector(root, selector);
+    return matchingElements.length ? matchingElements[matchingElements.length - 1] : null;
 }
 
 /**
@@ -165,7 +203,7 @@ function warnAboutInvalids(root) {
         if (!el.ariaLabel && el.dataset.deAriaGroup !== "static" && el.dataset.deAriaText !== "true") {
             console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing an aria-label and is not a static group nor a text element with data-de-aria-text="true". Consider adding an aria-label attribute to the element or setting data-de-aria-group="static" to indicate that it is a static group or marking it as text with data-de-aria-text="true".`);
         }
-        if (!el.matches(FOCUSABLE_SELECTOR) && el.dataset.deAriaGroup === "static") {
+        if (!el.matches(FOCUSABLE_SELECTOR) && el.dataset.deAriaGroup !== "static") {
             console.warn(el, `Element ${el.tagName} has data-de-aria-group but is not a focusable element. Consider adding a focusable role or removing the data-de-aria-group attribute or setting data-de-aria-group="static" to indicate that it is a static group.`);
         }
         if (el.dataset.deAriaGroup === "static" && el.dataset.deAriaKey) {
@@ -174,8 +212,9 @@ function warnAboutInvalids(root) {
         if (el.dataset.deAriaGroup === "static" && el.dataset.deAriaText === "true") {
             console.warn(el, `Element ${el.tagName} has data-de-aria-group="static" but also has data-de-aria-text="true". Consider removing the data-de-aria-text attribute or setting data-de-aria-group to dynamic value.`);
         }
-        if (el.dataset.deAriaGroup && el.dataset.deAriaText !== "true" && el.role !== "group") {
-            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing role="group" and it is not a text element with data-de-aria-text="true". Consider adding role="group" to the element.`);
+        const role = el.getAttribute("role")?.trim().toLowerCase() || "";
+        if (el.dataset.deAriaGroup && el.dataset.deAriaText !== "true" && !DE_ARIA_GROUP_ROLES.has(role)) {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group but does not use role="group", role="dialog", or role="alertdialog", and it is not a text element with data-de-aria-text="true". Consider adding the role that matches the element's purpose.`);
         }
     }
 }
@@ -495,6 +534,23 @@ function isClickable(el) {
 }
 
 /**
+ * Returns whether the browser already provides keyboard activation for this
+ * element. Calling `.click()` for Enter or Space on these elements would run
+ * their action in addition to the browser's native activation.
+ * @param {HTMLElement} el
+ * @returns {boolean}
+ */
+function hasNativeKeyboardActivation(el) {
+    if (el.tagName === "BUTTON" || el.tagName === "SUMMARY") return true;
+    if (el.tagName === "A" && el.hasAttribute("href")) return true;
+    if (el.tagName === "INPUT") {
+        const type = /** @type {HTMLInputElement} */ (el).type;
+        return type === "checkbox" || type === "radio" || type === "submit" || type === "button" || type === "reset" || type === "image";
+    }
+    return false;
+}
+
+/**
  * @param {HTMLElement} el
  * @returns {boolean}
  */
@@ -780,23 +836,31 @@ document.addEventListener("DOMContentLoaded", () => {
             scrollElement(currentScroller, e.key);
         }
 
+        const isActivationKey = e.key === "Enter" || e.key === " ";
+        const focusedIsDeAriaGroup = currentlyFocused && typeof currentlyFocused.dataset.deAriaGroup !== "undefined";
+
         if (
             currentlyFocused &&
-            (e.key === "Enter" || e.key === " ") &&
+            isActivationKey &&
+            !focusedIsDeAriaGroup &&
             // @ts-ignore
-            isClickable(currentlyFocused)
+            isClickable(currentlyFocused) &&
+            // @ts-ignore
+            !hasNativeKeyboardActivation(currentlyFocused)
         ) {
+            e.preventDefault();
             // @ts-ignore
             currentlyFocused.click();
         }
 
         if (
             currentlyFocused &&
-            (e.key === "Enter" || e.key === " ") &&
-            typeof currentlyFocused.dataset.deAriaGroup !== "undefined"
+            isActivationKey &&
+            focusedIsDeAriaGroup
         ) {
             const currentlyActiveDeAriaGroup = getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`);
             if (currentlyActiveDeAriaGroup !== currentlyFocused) {
+                e.preventDefault();
                 if (currentlyActiveDeAriaGroup) delete currentlyActiveDeAriaGroup.dataset.deAriaGroupActive;
                 currentlyFocused.dataset.deAriaGroupActive = "";
                 setTimeout(() => {
@@ -885,12 +949,16 @@ function makeShadowRootsAdoptAccessibilityStyles(sheets, root) {
  * @param {Document | HTMLElement} root
  * @param {{
  *    groupActive: Document | HTMLElement,
+ *    groupActiveUseInert: boolean
  * } | null} info
  */
 function ensureConsistencyOfDOM(root, info = null) {
     if (!info) {
+        const groupActive = getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`) || document;
         info = {
-            groupActive: getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`) || document,
+            groupActive: groupActive,
+            // @ts-ignore
+            groupActiveUseInert: groupActive !== document ? typeof groupActive.dataset.deAriaGroupUseInert !== "undefined" : false,
         };
     }
 
@@ -901,7 +969,7 @@ function ensureConsistencyOfDOM(root, info = null) {
     const isActiveGroup = root === info.groupActive;
 
     for (const el of focusableElements) {
-        if (isActiveGroup) {
+        if (isActiveGroup || info.groupActiveUseInert) {
             const expectedTabIndex = el.dataset.dataDeAriaGroupOriginalTabIndex ? Number(el.dataset.dataDeAriaGroupOriginalTabIndex) : (el.tabIndex >= 0 ? el.tabIndex : 0);
             if (el.tabIndex !== expectedTabIndex) {
                 el.tabIndex = expectedTabIndex;
@@ -913,11 +981,28 @@ function ensureConsistencyOfDOM(root, info = null) {
                 el.tabIndex = -1;
             }
         }
+
+        if (isActiveGroup || !info.groupActiveUseInert) {
+            const expectedInert = el.dataset.dataDeAriaGroupOriginalInert === "true" ? true : false;
+            if (el.inert !== expectedInert) {
+                el.inert = expectedInert;
+            }
+        } else {
+            const expectedInert = true;
+            if (el.inert !== expectedInert) {
+                el.dataset.dataDeAriaGroupOriginalInert = String(el.inert);
+                if (el.textContent === "Failed to initialize the inference adapter. Please check your API key and host configuration, and ensure that your API key has the necessary permissions.") {
+                    debugger;
+                }
+                el.inert = true;
+            }
+        }
     }
 
     const childGroups = getAllElementsListBySelector(root, "[data-de-aria-group]", "[data-de-aria-group]");
 
     for (const group of childGroups) {
+        debugger;
         ensureConsistencyOfDOM(group, info);
     }
 }
