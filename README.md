@@ -4,11 +4,41 @@ Accessibility tools HTML websites.
 
 Pressing and releasing **Ctrl** (tap without any combo key) shows keyboard shortcut hints for all currently interactive elements. Pressing any other key, clicking, scrolling with the mouse, or any non-hover mouse event hides them. While hints are visible, **arrow keys** scroll the active scroller without hiding the hints.
 
+## Idea
+
+de-aria aims to improve accessibility by providing shortcuts for all interactive elements on a page, and a scroller overlay for scrollable regions. It is designed to be used in conjunction with screenreaders and voice command accessibility suites.
+
+Unlike most accessibility approaches, de-aria does not provide an equal experience for all users; instead it focuses on providing a clean experience for each disability type. For example, a screenreader user will not see any visual hints, but a physically disabled user with intact vision will see the hints and be able to use them.
+
+### All Text is focusable
+
+De-aria takes a unique concept where all text is meant to be focusable and part of the accessibility tree. This is a design choice that allows for a more natural flow of information and interaction for users with disabilities. So they can decide what text to read and what to interact with rather than being forced to read everything in a linear fashion. Screenreaders will be able to read the text as the user tabs through the elements.
+
+### Groups are key
+
+Unlike other accessibility approaches, de-aria groups elements together; for example a paragraph might have multiple links in them; a sighted user will not interact with links most of the time so it makes no sense to always highlight them; instead, de-aria allows the user to focus on the paragraph and move through paragraphs and then enter these "groups" to interact with the links. This allows for a more natural flow of information and interaction for users with disabilities, so they only interact with what they need; this is similar to how a signed person might interact.
+
+For physical disabilities, these groups also allow to prevent clutter, dynamic groups are themselves receiving a keyboard shortcut, after selecting one, the internal elements will receive their own keyboard shortcuts. This prevents excessive clutter of all the shortcuts on the screen at once.
+
+### Small Changes
+
+De-aria aims to be a small change to existing websites, with its de-aria properties; however things to keep in mind are:
+
+#### ReactJS, VueJS, AngularJS, SvelteJS, etc.
+
+When using de-aria with frameworks that use virtual DOMs, you need to understand that de-aria adds custom properties to the DOM elements as they are interacted with. If the framework re-renders the DOM, these properties will be lost and de-aria will not work as expected.
+
+TODO:
+
+For that you need to use custom de-aria components, they will be analog to your standard html elements, but use shadow DOM to protect these custom attributes.
+
+Using the exposed DOM is however a cleaner approach if your project does not use a framework or if using the exposed DOM works in that specific framework or case.
+
 ## Screenreaders
 
 Screenreaders follow the application flow and are mostly unaffected since the natural flow of html allows for the usage of screenreaders easily.
 
-De-aria however enforces the idea that visible elements should be focuseable, which creates an "outline" where you can see what it is actually reading at a time; all 
+De-aria however enforces the idea that visible elements should be focusable, which creates an "outline" where you can see what it is actually reading at a time; all other elements are skipped.
 
 ## Physically disabled
 
@@ -25,12 +55,6 @@ You can test with a voice driven accessibility suite, eg. like Talon.
 ```
 
 Import the script as an ES module. No framework or build step required.
-
-## Use With `inert=true`
-
-de-aria is inert sensitive and you are supposed to use it with such property to take advantage of its full fledged functionality, check out the inert html property to see what it does.
-
----
 
 ## HTML Attributes
 
@@ -169,27 +193,83 @@ Combine with `data-de-aria-horizontal-alignment` and `data-de-aria-offset-x` / `
 
 ### `data-de-aria-scroller-class`
 
-**Optional. Place on a `[data-de-role="scroller"]` element.** Extra CSS class(es) added to the scroller overlay box, in addition to the base `de-aria-scroller` class.
+**Optional. Place on a `[data-de-aria-role="scroller"]` element.** Extra CSS class(es) added to the scroller overlay box, in addition to the base `de-aria-scroller` class.
 
 ```html
-<div data-de-role="scroller" data-de-aria-scroller-class="my-scroll-overlay">...</div>
+<div data-de-aria-role="scroller" data-de-aria-scroller-class="my-scroll-overlay">...</div>
 ```
 
 ---
 
-### `data-de-role="scroller"`
+### `data-de-aria-role="scroller"`
 
 Marks an element as the scrollable region. The library finds the first accessible element with this attribute and shows the arrow-key overlay on top of it.
 
 The element must also be actually scrollable (i.e. have `overflow: auto` or `overflow: scroll` and content that overflows).
 
 ```html
-<div data-de-role="scroller" style="overflow: auto; height: 300px;">
+<div data-de-aria-role="scroller" style="overflow: auto; height: 300px;">
     <!-- scrollable content -->
 </div>
 ```
 
 Arrow directions are shown or hidden based on whether scrolling in that direction is currently possible. If neither axis is scrollable the overlay is not shown at all.
+
+---
+
+### `data-de-aria-group`
+
+Groups represent a set of elements that are related to each other, webapps can get complex and have multiple elements for example a navigation bar can have multiple links, a paragraph can have multiple links, etc. de-aria allows to group these elements together and then allow the user to focus on the group and then enter the group to interact with the internal elements.
+
+#### Dynamic groups
+
+Dynamic groups are escapable, meaning that the user can enter the group and then exit the group to go back to the main flow of the application.
+
+In the example below at first you can tab upon two elements, a paragraph and the div; the screenreader will read the paragraph and then read "Navigation Links, press enter to choose one", another tab will go back to the paragraph, but if you press enter on the div, the focus will shift to the first link and then you can tab through the links and then exit the group by pressing escape.
+
+```html
+<p data-de-aria-text="true" tabindex="0">This paragraph is tabbable and can be read by screenreaders, but if you enter the dynamic group below, the focus will shift to the group.</p>
+<div data-de-aria-group="dynamic" tabindex="0" data-de-aria-key="g" aria-label="Navigation Links, press enter to choose one">
+    <a href="/home" data-de-aria-key="h">Home</a>
+    <a href="/about" data-de-aria-key="a">About</a>
+    <a href="/contact" data-de-aria-key="c">Contact</a>
+</div>
+```
+
+#### Dynamic groups, but text
+
+A dynamic group that doesn't need an aria label because it is already a text element
+
+In this example below at first you can tab upon two elements, a paragraph and the p; the screenreader will read the paragraph and then read "If you need help, please contact us at Contact or visit our Help page.", another tab will go back to the paragraph, but if you press enter on the p, the focus will shift to the first link and then you can tab through the links and then exit the group by pressing escape, so Contact and Help in that internal case.
+
+```html
+<p data-de-aria-text="true" tabindex="0">This paragraph is tabbable and can be read by screenreaders, but if you enter the dynamic group below, the focus will shift to the group.</p>
+<p data-de-aria-group="dynamic" data-de-aria-text="true" tabindex="0">
+    If you need help, please contact us at <a href="/contact" data-de-aria-key="c">Contact</a> or visit our <a href="/help" data-de-aria-key="h">Help</a> page.
+</p>
+```
+
+#### Static groups
+
+Static groups are mostly used for pop-in dialogs or other layers, like a modal dialog or an overlay. These groups are not escapable, meaning that the user cannot exit the group to go back to the main flow of the application.
+
+By default however the group is not active unless data-de-aria-group-active is set, this is a html boolean and does not have to be set to true or false, just the presence of the attribute is enough to make the group active.
+
+A static group should not have a tabindex, since it is not meant to be focused, but rather acts like a focus trap.
+
+```html
+<p data-de-aria-text="true" tabindex="0">This paragraph is not tabbable because the focus trap is active.</p>
+<div data-de-aria-group="static" data-de-aria-group-active>
+    <h2 data-de-aria-text="true" tabindex="0">Focus Trap</h2>
+    <p data-de-aria-text="true" tabindex="0">This is a focus trap. You cannot exit this group until you close the trap.</p>
+    <button data-de-aria-key="c">Close Trap</button>
+</div>
+<p data-de-aria-text="true" tabindex="0">This paragraph is also not tabbable because the focus trap is active.</p>
+```
+
+#### Which group is currently active?
+
+If two groups are active, the library will use the last deepest one in the DOM tree, this allows for nested active groups.
 
 ---
 
@@ -269,7 +349,7 @@ Arrows whose direction is not currently scrollable are hidden via `visibility: h
 
 ### Marked scroller element: `.de-aria-scroll-marked`
 
-Added to the `[data-de-role="scroller"]` element itself while the overlay is active.
+Added to the `[data-de-aria-role="scroller"]` element itself while the overlay is active.
 
 ```css
 .de-aria-scroll-marked {

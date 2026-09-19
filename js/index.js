@@ -1,4 +1,4 @@
-const FOCUSABLE_SELECTOR = [
+const FOCUSABLE_SELECTOR_NO_TABINDEX = [
     "a[href]",
     "button",
     "input",
@@ -9,8 +9,9 @@ const FOCUSABLE_SELECTOR = [
     "iframe",
     "summary",
     "[contenteditable]:not([contenteditable='false'])",
-    "[tabindex]",
 ].join(",");
+
+const FOCUSABLE_SELECTOR = FOCUSABLE_SELECTOR_NO_TABINDEX + "," + "[tabindex]";
 
 /**
  * 
@@ -23,7 +24,7 @@ function isAccessible(el) {
     // @ts-ignore
     if (el.dataset.deAriaText === "true") return false;
     // @ts-ignore
-    if (!el.dataset.deRole && typeof el.tabIndex === "number" && el.tabIndex < 0) return false;
+    // if (!el.dataset.deAriaRole && typeof el.tabIndex === "number" && el.tabIndex < 0) return false;
 
     // Walk up the tree checking for inert / hidden ancestors, crossing shadow root boundaries.
     // @ts-ignore
@@ -48,15 +49,29 @@ function isAccessible(el) {
 /**
  * @param {any} root 
  * @param {string} selector
+ * @param {string} [excludeParentSelector]
  * @returns {HTMLElement[]}
  */
-function getAllElementsListBySelector(root, selector) {
-    const foundElements = Array.from(root.querySelectorAll(selector));
+function getAllElementsListBySelector(root, selector, excludeParentSelector) {
+    const foundElements = Array.from(root.querySelectorAll(selector)).filter(el => {
+        if (!excludeParentSelector) return true;
+
+        // we need to traverse up the tree to check if any of the parents match the excludeParentSelector, however the root is not included on this
+        // the root can be that excludeParentSelector, so we only traverse up to the root
+        let parent = el.parentElement;
+        while (parent && parent !== root) {
+            if (parent.matches(excludeParentSelector)) {
+                return false;
+            }
+            parent = parent.parentElement;
+        }
+        return true;
+    });
 
     const elementsWithShadowRoots = root.querySelectorAll("*");
     for (const el of elementsWithShadowRoots) {
-        if (el.shadowRoot || el.root) {
-            const foundAtShadow = getAllElementsListBySelector(el.shadowRoot || el.root, selector);
+        if ((el.shadowRoot || el.root) && (excludeParentSelector ? !el.matches(excludeParentSelector) && !el.closest(excludeParentSelector) : true)) {
+            const foundAtShadow = getAllElementsListBySelector(el.shadowRoot || el.root, selector, excludeParentSelector);
             foundElements.push(...foundAtShadow);
         }
     }
@@ -64,6 +79,7 @@ function getAllElementsListBySelector(root, selector) {
 }
 
 /**
+ * Gets a specific element by selector, piercing shadow roots. Returns the first matching element found in the DOM tree, or null if none is found.
  * 
  * @param {any} root 
  * @param {string} selector 
@@ -73,13 +89,35 @@ function getSpecificElementBySelector(root, selector) {
     const foundHere = root.querySelector(selector);
     if (foundHere) return foundHere;
 
-    const elementsWithShadowRoots = root.querySelectorAll("*");
+    const elementsWithShadowRoots = Array.from(root.querySelectorAll("*"));
     for (const el of elementsWithShadowRoots) {
         if (el.shadowRoot || el.root) {
             const foundAtShadow = getSpecificElementBySelector(el.shadowRoot || el.root, selector);
             if (foundAtShadow) return foundAtShadow;
         }
     }
+    return null;
+}
+
+/**
+ * Gets a specific element by selector, piercing shadow roots. Returns the last matching element found in the DOM tree, or null if none is found.
+ * 
+ * @param {any} root 
+ * @param {string} selector 
+ * @returns {HTMLElement | null}
+ */
+function getSpecificElementBySelectorLast(root, selector) {
+    const elementsWithShadowRoots = Array.from(root.querySelectorAll("*")).reverse();
+    for (const el of elementsWithShadowRoots) {
+        if (el.shadowRoot || el.root) {
+            const foundAtShadow = getSpecificElementBySelector(el.shadowRoot || el.root, selector);
+            if (foundAtShadow) return foundAtShadow;
+        }
+    }
+
+    const foundHere = root.querySelector(selector);
+    if (foundHere) return foundHere;
+    
     return null;
 }
 
@@ -102,10 +140,49 @@ function getDeepActiveElement() {
     return el;
 }
 
-function showAccessibility() {
-    showAccessibilityFocusables();
+/**
+ * @param {Document | HTMLElement} root 
+ */
+function warnAboutInvalids(root) {
+    // look for elements with data-de-aria-key but does not match a focusable element, and warn about them
+    const potentiallyInvalidElements = getAllElementsListBySelector(root, "[data-de-aria-key]");
+    for (const el of potentiallyInvalidElements) {
+        if (el.matches(FOCUSABLE_SELECTOR)) continue;
+        console.warn(el, `Element ${el.tagName} has data-de-aria-key but is not a focusable element. Consider adding a focusable role or removing the data-de-aria-key attribute.`);
+    }
 
-    const scroller = getAllElementsListBySelector(document, '[data-de-role="scroller"]')
+    const potentiallyInvalidElements2 = getAllElementsListBySelector(root, "[data-de-aria-action]");
+    for (const el of potentiallyInvalidElements2) {
+        if (el.matches(FOCUSABLE_SELECTOR)) continue;
+        console.warn(el, `Element ${el.tagName} has data-de-aria-action but is not a focusable element. Consider adding a focusable role or removing the data-de-aria-action attribute.`);
+    }
+
+    const potentiallyInvalidElements3GroupsInside = getAllElementsListBySelector(root, "[data-de-aria-group]");
+    for (const el of potentiallyInvalidElements3GroupsInside) {
+        if (!el.dataset.deAriaKey && el.dataset.deAriaGroup !== "static" && el.dataset.deAriaText !== "true") {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing data-de-aria-key and is not a static group nor a text element with data-de-aria-text="true". Consider adding a data-de-aria-key attribute to the element or setting data-de-aria-group="static" to indicate that it is a static group or marking it as text with data-de-aria-text="true".`);
+        }
+        if (!el.ariaLabel && el.dataset.deAriaGroup !== "static" && el.dataset.deAriaText !== "true") {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing an aria-label and is not a static group nor a text element with data-de-aria-text="true". Consider adding an aria-label attribute to the element or setting data-de-aria-group="static" to indicate that it is a static group or marking it as text with data-de-aria-text="true".`);
+        }
+        if (!el.matches(FOCUSABLE_SELECTOR) && el.dataset.deAriaGroup === "static") {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is not a focusable element. Consider adding a focusable role or removing the data-de-aria-group attribute or setting data-de-aria-group="static" to indicate that it is a static group.`);
+        }
+        if (el.dataset.deAriaGroup === "static" && el.dataset.deAriaKey) {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group="static" but also has a data-de-aria-key attribute. Consider removing the data-de-aria-key attribute or setting data-de-aria-group to dynamic value.`);
+        }
+        if (el.dataset.deAriaGroup === "static" && el.dataset.deAriaText === "true") {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group="static" but also has data-de-aria-text="true". Consider removing the data-de-aria-text attribute or setting data-de-aria-group to dynamic value.`);
+        }
+    }
+}
+
+function showAccessibility() {
+    warnAboutInvalids(document);
+
+    showAccessibilityFocusables(document);
+
+    const scroller = getAllElementsListBySelector(document, '[data-de-aria-role="scroller"]')
         .find(isAccessible) || null;
 
     if (scroller) {
@@ -114,8 +191,11 @@ function showAccessibility() {
     }
 }
 
-function showAccessibilityFocusables() {
-    const focusable = getAllElementsListBySelector(document, FOCUSABLE_SELECTOR)
+/**
+ * @param {Document | HTMLElement} parent 
+ */
+function showAccessibilityFocusables(parent) {
+    const focusable = getAllElementsListBySelector(parent, FOCUSABLE_SELECTOR, "[data-de-aria-group]")
         .filter(isAccessible);
     
     for (const el of focusable) {
@@ -358,35 +438,41 @@ function triggerFocusableElement(el) {
         if (indicator) {
             indicator.textContent = nextNestNumber + newNestNumber;
         }
-        return {continueAccessibility: true, ranFocus: false};
+        return {continueAccessibility: true, continueAccessibilityOnGroup: null, ranFocus: false};
     }
 
     const action = el.dataset.deAriaAction || "default";
 
     if (action === "none") {
-        return {continueAccessibility: false, ranFocus: false};
+        return {continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: false};
     }
 
     if (action === "click" || action === "default" && isClickable(el)) {
         el.click();
-        return {continueAccessibility: false, ranFocus: false};
+        return {continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: false};
     }
 
     if (action === "focus" || action === "default" && isFocusInput(el)) {
         el.focus();
-        return {continueAccessibility: false, ranFocus: true};
+        return {continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: true};
     }
 
     if (action === "play" || action === "default" && isMedia(el)) {
         const media = /** @type {HTMLMediaElement} */ (el);
         if (media.paused) media.play();
         else media.pause();
-        return {continueAccessibility: false, ranFocus: false};
+        return {continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: false};
     }
 
-    // Final fallback for "default" — just focus the element.
-    el.focus();
-    return {continueAccessibility: false, ranFocus: true};
+    if (typeof el.dataset.deAriaGroup !== "undefined") {
+        // if this element represents a group, then show the accessibility within it
+        return {continueAccessibility: false, continueAccessibilityOnGroup: el, ranFocus: false};
+    } else {
+        // Final fallback for "default" — just focus the element.
+        el.focus();
+
+        return {continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: true};
+    }
 }
 
 /**
@@ -648,6 +734,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const matchingElements = getAllElementsListBySelector(document, `[data-de-aria-next-key-to-trigger="${e.key.toLowerCase()}"]`);
 
         let accessibilityContinuesIntoNested = false;
+        /**
+         * @type {HTMLElement | null}
+         */
+        let accessibilityContinuesOnGroup = null;
         let shouldPreventDefault = false;
         let shouldStopPropagation = false;
         if (matchingElements) {
@@ -655,6 +745,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 const triggerInfo = triggerFocusableElement(el);
                 if (triggerInfo.continueAccessibility) {
                     accessibilityContinuesIntoNested = true;
+                }
+                if (triggerInfo.continueAccessibilityOnGroup) {
+                    accessibilityContinuesOnGroup = triggerInfo.continueAccessibilityOnGroup;
                 }
                 if (triggerInfo.ranFocus || triggerInfo.continueAccessibility) {
                     shouldPreventDefault = true;
@@ -674,6 +767,10 @@ document.addEventListener("DOMContentLoaded", () => {
             hideAccessibility(accessibilityContinuesIntoNested ? matchingElements : []);
         }
 
+        if (accessibilityContinuesOnGroup) {
+            showAccessibilityFocusables(accessibilityContinuesOnGroup);
+        }
+
         const currentScroller = getSpecificElementBySelector(document, ".de-aria-scroll-marked");
         if (arrowKeys.has(e.key) && currentScroller) {
             // @ts-ignore
@@ -689,19 +786,51 @@ document.addEventListener("DOMContentLoaded", () => {
             // @ts-ignore
             currentlyFocused.click();
         }
-    });
+
+        if (
+            currentlyFocused &&
+            (e.key === "Enter" || e.key === " ") &&
+            typeof currentlyFocused.dataset.deAriaGroup !== "undefined"
+        ) {
+            const currentlyActiveDeAriaGroup = getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`);
+            if (currentlyActiveDeAriaGroup !== currentlyFocused) {
+                if (currentlyActiveDeAriaGroup) delete currentlyActiveDeAriaGroup.dataset.deAriaGroupActive;
+                currentlyFocused.dataset.deAriaGroupActive = "";
+                setTimeout(() => {
+                    getSpecificElementBySelector(currentlyFocused, FOCUSABLE_SELECTOR)?.focus();
+                }, 100);
+            }
+        }
+
+        if (e.key === "Escape") {
+            const currentlyActiveDeAriaGroup = getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`);
+            if (currentlyActiveDeAriaGroup) {
+                const isStatic = currentlyActiveDeAriaGroup.dataset.deAriaGroup === "static";
+                if (!isStatic) {
+                    delete currentlyActiveDeAriaGroup.dataset.deAriaGroupActive;
+                    e.stopImmediatePropagation();
+                    e.stopPropagation();
+                    e.preventDefault();
+                    currentlyActiveDeAriaGroup.focus();
+                }
+            }
+        }
+    }, { capture: true });
 
     document.addEventListener("keyup", (e) => {
         if (lastKeyDown === "Control" && !lastKeyDownAccessibilityVisible) {
             showAccessibility();
+            e.stopImmediatePropagation();
+            e.stopPropagation();
+            e.preventDefault();
         }
-    });
+    }, { capture: true });
 
     const mouseHideEvents = ["mousedown", "mouseup", "click", "contextmenu", "wheel", "pointerdown", "pointerup"];
     for (const event of mouseHideEvents) {
         document.addEventListener(event, hideAccessibility.bind(null, []), { passive: true });
     }
-});
+}, { once: true });
 
 /**
  * @type {Record<string, CSSStyleSheet>}
@@ -748,3 +877,117 @@ function makeShadowRootsAdoptAccessibilityStyles(sheets, root) {
         }
     }
 }
+
+/**
+ * @param {Document | HTMLElement} root
+ * @param {{
+ *    groupActive: Document | HTMLElement,
+ * } | null} info
+ */
+function ensureConsistencyOfDOM(root, info = null) {
+    if (!info) {
+        info = {
+            groupActive: getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`) || document,
+        };
+    }
+
+    // we do not filter here because we don't care if they are accessible or not
+    // we want to disable all
+    const focusableElements = getAllElementsListBySelector(root, FOCUSABLE_SELECTOR, "[data-de-aria-group]");
+
+    const isActiveGroup = root === info.groupActive;
+    // @ts-ignore
+    const rootIsText = root !== document && root.dataset.deAriaText === "true";
+
+    for (const el of focusableElements) {
+        if (isActiveGroup) {
+            const expectedTabIndex = el.dataset.dataDeAriaGroupOriginalTabIndex ? Number(el.dataset.dataDeAriaGroupOriginalTabIndex) : (el.tabIndex >= 0 ? el.tabIndex : 0);
+            if (el.tabIndex !== expectedTabIndex) {
+                el.tabIndex = expectedTabIndex;
+            }
+            if (!rootIsText) {
+                const expectedAriaHidden = el.dataset.dataDeAriaGroupOriginalAriaHidden || "false";
+                if (el.getAttribute("aria-hidden") !== expectedAriaHidden) {
+                    el.setAttribute("aria-hidden", expectedAriaHidden);
+                }
+            }
+        } else {
+            const expectedTabIndex = -1;
+            if (el.tabIndex !== expectedTabIndex) {
+                el.dataset.dataDeAriaGroupOriginalTabIndex = String(el.tabIndex);
+                el.tabIndex = -1;
+            }
+            if (!rootIsText) {
+                const expectedAriaHidden = "true";
+                if (el.getAttribute("aria-hidden") !== expectedAriaHidden) {
+                    el.dataset.dataDeAriaGroupOriginalAriaHidden = el.getAttribute("aria-hidden") || "false";
+                    el.setAttribute("aria-hidden", expectedAriaHidden);
+                }
+            }
+        }
+    }
+
+    const childGroups = getAllElementsListBySelector(root, "[data-de-aria-group]", "[data-de-aria-group]");
+
+    for (const group of childGroups) {
+        ensureConsistencyOfDOM(group, info);
+    }
+}
+
+ensureConsistencyOfDOM(document);
+
+/**
+ * @param {MutationRecord[]} mutationsList
+ */
+function realMutationObserverCallback(mutationsList) {
+    ensureConsistencyOfDOM(document);
+}
+
+/** @type {WeakSet<Node>} */
+const observedRoots = new WeakSet();
+
+const observer = new MutationObserver((mutationsList) => {
+    // Newly added elements may contain more exposed shadow roots.
+    for (const mutation of mutationsList) {
+        for (const node of mutation.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                observeShadowRoots(/** @type {Element} */ (node));
+            }
+        }
+    }
+
+    realMutationObserverCallback(mutationsList);
+});
+
+/**
+ * Observes every exposed shadow root below `root`.
+ *
+ * @param {Document | Element | ShadowRoot} root
+ */
+function observeShadowRoots(root) {
+    const elements = root instanceof Element
+        ? [root, ...root.querySelectorAll("*")]
+        : root.querySelectorAll("*");
+
+    for (const el of elements) {
+        const shadow = /** @type {any} */ (el).shadowRoot || /** @type {any} */ (el).root;
+        if (!shadow || observedRoots.has(shadow)) continue;
+
+        observedRoots.add(shadow);
+        observer.observe(shadow, {
+            attributes: true,
+            characterData: true,
+            childList: true,
+            subtree: true,
+        });
+        observeShadowRoots(shadow);
+    }
+}
+
+observer.observe(document, {
+    attributes: true,
+    characterData: true,
+    childList: true,
+    subtree: true,
+});
+observeShadowRoots(document);
