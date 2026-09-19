@@ -229,7 +229,7 @@ In the example below at first you can tab upon two elements, a paragraph and the
 
 ```html
 <p data-de-aria-text="true" tabindex="0">This paragraph is tabbable and can be read by screenreaders, but if you enter the dynamic group below, the focus will shift to the group.</p>
-<div data-de-aria-group="dynamic" tabindex="0" data-de-aria-key="g" aria-label="Navigation Links, press enter to choose one">
+<div data-de-aria-group="dynamic" tabindex="0" data-de-aria-key="g" aria-label="Navigation Links, press enter to choose one" role="group">
     <a href="/home" data-de-aria-key="h">Home</a>
     <a href="/about" data-de-aria-key="a">About</a>
     <a href="/contact" data-de-aria-key="c">Contact</a>
@@ -259,7 +259,7 @@ A static group should not have a tabindex, since it is not meant to be focused, 
 
 ```html
 <p data-de-aria-text="true" tabindex="0">This paragraph is not tabbable because the focus trap is active.</p>
-<div data-de-aria-group="static" data-de-aria-group-active>
+<div data-de-aria-group="static" data-de-aria-group-active role="group">
     <h2 data-de-aria-text="true" tabindex="0">Focus Trap</h2>
     <p data-de-aria-text="true" tabindex="0">This is a focus trap. You cannot exit this group until you close the trap.</p>
     <button data-de-aria-key="c">Close Trap</button>

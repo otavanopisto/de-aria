@@ -174,6 +174,9 @@ function warnAboutInvalids(root) {
         if (el.dataset.deAriaGroup === "static" && el.dataset.deAriaText === "true") {
             console.warn(el, `Element ${el.tagName} has data-de-aria-group="static" but also has data-de-aria-text="true". Consider removing the data-de-aria-text attribute or setting data-de-aria-group to dynamic value.`);
         }
+        if (el.dataset.deAriaGroup && el.role !== "group") {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing role="group". Consider adding role="group" to the element.`);
+        }
     }
 }
 
@@ -896,8 +899,6 @@ function ensureConsistencyOfDOM(root, info = null) {
     const focusableElements = getAllElementsListBySelector(root, FOCUSABLE_SELECTOR, "[data-de-aria-group]");
 
     const isActiveGroup = root === info.groupActive;
-    // @ts-ignore
-    const rootIsText = root !== document && root.dataset.deAriaText === "true";
 
     for (const el of focusableElements) {
         if (isActiveGroup) {
@@ -905,24 +906,11 @@ function ensureConsistencyOfDOM(root, info = null) {
             if (el.tabIndex !== expectedTabIndex) {
                 el.tabIndex = expectedTabIndex;
             }
-            if (!rootIsText) {
-                const expectedAriaHidden = el.dataset.dataDeAriaGroupOriginalAriaHidden || "false";
-                if (el.getAttribute("aria-hidden") !== expectedAriaHidden) {
-                    el.setAttribute("aria-hidden", expectedAriaHidden);
-                }
-            }
         } else {
             const expectedTabIndex = -1;
             if (el.tabIndex !== expectedTabIndex) {
                 el.dataset.dataDeAriaGroupOriginalTabIndex = String(el.tabIndex);
                 el.tabIndex = -1;
-            }
-            if (!rootIsText) {
-                const expectedAriaHidden = "true";
-                if (el.getAttribute("aria-hidden") !== expectedAriaHidden) {
-                    el.dataset.dataDeAriaGroupOriginalAriaHidden = el.getAttribute("aria-hidden") || "false";
-                    el.setAttribute("aria-hidden", expectedAriaHidden);
-                }
             }
         }
     }
