@@ -24,9 +24,9 @@ function isAccessible(el) {
     if (el.hasAttribute("disabled")) return false;
     if (el.getAttribute("aria-hidden") === "true") return false;
     // @ts-ignore
-    if (el.dataset.deAriaText === "true") return false;
+    if (typeof el.dataset.deAriaText !== "undefined") return false;
     // @ts-ignore
-    // if (!el.dataset.deAriaRole && typeof el.tabIndex === "number" && el.tabIndex < 0) return false;
+    if (el.tagName === "IMG" && !el.dataset.deAriaKey && !el.dataset.deAriaAction) return false;
 
     // Walk up the tree checking for inert / hidden ancestors, crossing shadow root boundaries.
     // @ts-ignore
@@ -197,24 +197,31 @@ function warnAboutInvalids(root) {
 
     const potentiallyInvalidElements3GroupsInside = getAllElementsListBySelector(root, "[data-de-aria-group]");
     for (const el of potentiallyInvalidElements3GroupsInside) {
-        if (!el.dataset.deAriaKey && el.dataset.deAriaGroup !== "static" && el.dataset.deAriaText !== "true") {
-            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing data-de-aria-key and is not a static group nor a text element with data-de-aria-text="true". Consider adding a data-de-aria-key attribute to the element or setting data-de-aria-group="static" to indicate that it is a static group or marking it as text with data-de-aria-text="true".`);
+        if (!el.dataset.deAriaKey && el.dataset.deAriaGroup !== "static" && typeof el.dataset.deAriaText === "undefined") {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing data-de-aria-key and is not a static group nor a text element with data-de-aria-text. Consider adding a data-de-aria-key attribute to the element or setting data-de-aria-group="static" to indicate that it is a static group or marking it as text with data-de-aria-text.`);
         }
-        if (!el.ariaLabel && el.dataset.deAriaGroup !== "static" && el.dataset.deAriaText !== "true") {
-            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing an aria-label and is not a static group nor a text element with data-de-aria-text="true". Consider adding an aria-label attribute to the element or setting data-de-aria-group="static" to indicate that it is a static group or marking it as text with data-de-aria-text="true".`);
+        if (!el.ariaLabel && el.dataset.deAriaGroup !== "static" && typeof el.dataset.deAriaText === "undefined") {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group but is missing an aria-label and is not a static group nor a text element with data-de-aria-text. Consider adding an aria-label attribute to the element or setting data-de-aria-group="static" to indicate that it is a static group or marking it as text with data-de-aria-text.`);
         }
-        if (!el.matches(FOCUSABLE_SELECTOR) && el.dataset.deAriaGroup !== "static") {
+        if (!el.matches(FOCUSABLE_SELECTOR) && el.dataset.deAriaGroup !== "static" && typeof el.dataset.deAriaText === "undefined") {
             console.warn(el, `Element ${el.tagName} has data-de-aria-group but is not a focusable element. Consider adding a focusable role or removing the data-de-aria-group attribute or setting data-de-aria-group="static" to indicate that it is a static group.`);
         }
         if (el.dataset.deAriaGroup === "static" && el.dataset.deAriaKey) {
             console.warn(el, `Element ${el.tagName} has data-de-aria-group="static" but also has a data-de-aria-key attribute. Consider removing the data-de-aria-key attribute or setting data-de-aria-group to dynamic value.`);
         }
-        if (el.dataset.deAriaGroup === "static" && el.dataset.deAriaText === "true") {
-            console.warn(el, `Element ${el.tagName} has data-de-aria-group="static" but also has data-de-aria-text="true". Consider removing the data-de-aria-text attribute or setting data-de-aria-group to dynamic value.`);
+        if (el.dataset.deAriaGroup === "static" && typeof el.dataset.deAriaText !== "undefined") {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group="static" but also has data-de-aria-text. Consider removing the data-de-aria-text attribute or setting data-de-aria-group to dynamic value.`);
         }
         const role = el.getAttribute("role")?.trim().toLowerCase() || "";
-        if (el.dataset.deAriaGroup && el.dataset.deAriaText !== "true" && !DE_ARIA_GROUP_ROLES.has(role)) {
-            console.warn(el, `Element ${el.tagName} has data-de-aria-group but does not use role="group", role="dialog", or role="alertdialog", and it is not a text element with data-de-aria-text="true". Consider adding the role that matches the element's purpose.`);
+        if (el.dataset.deAriaGroup && typeof el.dataset.deAriaText === "undefined" && !DE_ARIA_GROUP_ROLES.has(role)) {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-group but does not use role="group", role="dialog", or role="alertdialog", and it is not a text element with data-de-aria-text. Consider adding the role that matches the element's purpose.`);
+        }
+    }
+
+    const potentiallyInvalidScrollers = getAllElementsListBySelector(root, "[data-de-aria-scroller]");
+    for (const el of potentiallyInvalidScrollers) {
+        if (el.tabIndex >= 0 || !el.tabIndex) {
+            console.warn(el, `Element ${el.tagName} has data-de-aria-scroller but it has a tabIndex of ${el.tabIndex}. Consider setting tabIndex="-1" to prevent it from being focusable.`);
         }
     }
 }
@@ -232,7 +239,7 @@ function showAccessibility(currentlyActiveDeAriaGroupOverride) {
     const currentlyActiveDeAriaGroup = currentlyActiveDeAriaGroupOverride || getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`) || document;
     showAccessibilityFocusables(currentlyActiveDeAriaGroup);
 
-    const scroller = getAllElementsListBySelector(currentlyActiveDeAriaGroup, '[data-de-aria-role="scroller"]')
+    const scroller = getAllElementsListBySelector(currentlyActiveDeAriaGroup, '[data-de-aria-scroller]', "[data-de-aria-group]")
         .find(isAccessible) || null;
 
     if (scroller) {
@@ -246,7 +253,7 @@ function showAccessibility(currentlyActiveDeAriaGroupOverride) {
  */
 function showAccessibilityFocusables(parent) {
     const focusable = getAllElementsListBySelector(parent, FOCUSABLE_SELECTOR, "[data-de-aria-group]")
-        .filter(isAccessible);
+        .filter(isAccessible).filter(el => typeof el.dataset.deAriaScroller === "undefined"); // don't mark scroller elements as focusable
     
     for (const el of focusable) {
         // @ts-ignore
@@ -345,7 +352,7 @@ function markFocusableElement(el) {
     const keyToUseLabel = (el.dataset.deAriaKeyLabel || keyToUse.toUpperCase());
 
     if (!el.dataset.deAriaKey) {
-        console.warn(`Element ${el.tagName} is missing data-de-aria-key attribute, using "${keyToUse}" as fallback. Consider adding a specific key for better accessibility.`);
+        console.warn(el, `Element ${el.tagName} is missing data-de-aria-key attribute, using "${keyToUse}" as fallback. Consider adding a specific key for better accessibility.`);
     }
 
     const randomId = Math.random().toString(36).slice(2);
@@ -727,15 +734,29 @@ const SCROLLER_WATCH_FRAMES = new WeakMap();
 
 /**
  * @param {HTMLElement} el 
- * @param {"ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight"} direction 
+ * @param {"ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight" | "PageUp" | "PageDown"} direction
  */
 function scrollElement(el, direction) {
     //hideFocusableElements();
+    const directionToScrollAmount = {
+        "ArrowUp": -Math.max(el.clientHeight / 4, 100),
+        "ArrowDown": Math.max(el.clientHeight / 4, 100),
+        "ArrowLeft": -Math.max(el.clientWidth / 4, 100),
+        "ArrowRight": Math.max(el.clientWidth / 4, 100),
+        "PageUp": -el.clientHeight,
+        "PageDown": el.clientHeight,
+    };
     el.scrollBy({
-        top: direction === "ArrowDown" ? 100 : direction === "ArrowUp" ? -100 : 0,
-        left: direction === "ArrowRight" ? 100 : direction === "ArrowLeft" ? -100 : 0,
+        top: directionToScrollAmount[direction] || 0,
+        left: directionToScrollAmount[direction] || 0,
         behavior: "smooth",
     });
+
+    // check if it has the scroller object
+    const visibleScroller = el.classList.contains("de-aria-scroll-marked");
+    if (!visibleScroller) {
+        return;
+    }
 
     // Cancel any prior watcher so we don't have multiple polling loops fighting.
     const existing = SCROLLER_WATCH_FRAMES.get(el);
@@ -784,7 +805,7 @@ document.addEventListener("DOMContentLoaded", () => {
      */
     let lastKeyDown = null;
 
-    const arrowKeys = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+    const arrowKeys = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageUp", "PageDown"]);
 
     document.addEventListener("keydown", (e) => {
         const isAccessibilityVisible = getSpecificElementBySelector(document, ".de-aria-key-indicator") !== null || getSpecificElementBySelector(document, ".de-aria-scroll-marked") !== null;
@@ -838,10 +859,16 @@ document.addEventListener("DOMContentLoaded", () => {
             showAccessibility(accessibilityContinuesOnGroup);
         }
 
-        const currentScroller = getSpecificElementBySelector(document, ".de-aria-scroll-marked");
-        if (arrowKeys.has(e.key) && currentScroller) {
-            // @ts-ignore
-            scrollElement(currentScroller, e.key);
+        if (arrowKeys.has(e.key)) {
+            const currentlyActiveDeAriaGroup = getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`) || document;
+
+            const currentScroller = getAllElementsListBySelector(currentlyActiveDeAriaGroup, '[data-de-aria-scroller]', "[data-de-aria-group]")
+                .find(isAccessible) || null;
+
+            if (currentScroller) {
+                // @ts-ignore
+                scrollElement(currentScroller, e.key);
+            }
         }
 
         const isActivationKey = e.key === "Enter" || e.key === " ";
@@ -978,7 +1005,7 @@ function ensureConsistencyOfDOM(root, info = null) {
 
     for (const el of focusableElements) {
         if (isActiveGroup || info.groupActiveUseInert) {
-            const expectedTabIndex = el.dataset.dataDeAriaGroupOriginalTabIndex ? Number(el.dataset.dataDeAriaGroupOriginalTabIndex) : (el.tabIndex >= 0 ? el.tabIndex : 0);
+            const expectedTabIndex = el.dataset.dataDeAriaGroupOriginalTabIndex ? Number(el.dataset.dataDeAriaGroupOriginalTabIndex) : el.tabIndex;
             if (el.tabIndex !== expectedTabIndex) {
                 el.tabIndex = expectedTabIndex;
             }

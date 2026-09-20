@@ -60,7 +60,7 @@ Import the script as an ES module. No framework or build step required.
 
 These are the attributes you place on your own elements to control behaviour. All attribute names follow the `data-de-aria-*` convention.
 
-### `data-de-aria-text=true`
+### `data-de-aria-text`
 
 Marks an element as text, meant to be tabbed and read only, not interacted with. This is for elements that are focusable but shouldn't be triggered by key presses, for example a custom dropdown built with a `<details>` element where the summary should be focused but not "clicked" when the user presses the key.
 
@@ -68,7 +68,7 @@ Should be added with tabindex="0" for it to function properly, screen-readers wi
 
 ```html
 <details>
-    <summary data-de-aria-text="true" tabindex="0">Choose an option</summary>
+    <summary data-de-aria-text tabindex="0">Choose an option</summary>
     <ul>
         <li><a href="/option1" data-de-aria-key="1">Option 1</a></li>
         <li><a href="/option2" data-de-aria-key="2">Option 2</a></li>
@@ -201,14 +201,14 @@ Combine with `data-de-aria-horizontal-alignment` and `data-de-aria-offset-x` / `
 
 ---
 
-### `data-de-aria-role="scroller"`
+### `data-de-aria-scroller`
 
 Marks an element as the scrollable region. The library finds the first accessible element with this attribute and shows the arrow-key overlay on top of it.
 
 The element must also be actually scrollable (i.e. have `overflow: auto` or `overflow: scroll` and content that overflows).
 
 ```html
-<div data-de-aria-role="scroller" style="overflow: auto; height: 300px;">
+<div data-de-aria-scroller tabindex="-1" style="overflow: auto; height: 300px;">
     <!-- scrollable content -->
 </div>
 ```
@@ -228,7 +228,7 @@ Dynamic groups are escapable, meaning that the user can enter the group and then
 In the example below at first you can tab upon two elements, a paragraph and the div; the screenreader will read the paragraph and then read "Navigation Links, press enter to choose one", another tab will go back to the paragraph, but if you press enter on the div, the focus will shift to the first link and then you can tab through the links and then exit the group by pressing escape.
 
 ```html
-<p data-de-aria-text="true" tabindex="0">This paragraph is tabbable and can be read by screenreaders, but if you enter the dynamic group below, the focus will shift to the group.</p>
+<p data-de-aria-text tabindex="0">This paragraph is tabbable and can be read by screenreaders, but if you enter the dynamic group below, the focus will shift to the group.</p>
 <div data-de-aria-group="dynamic" tabindex="0" data-de-aria-key="g" aria-label="Navigation Links, press enter to choose one" role="group">
     <a href="/home" data-de-aria-key="h">Home</a>
     <a href="/about" data-de-aria-key="a">About</a>
@@ -243,8 +243,8 @@ A dynamic group that doesn't need an aria label because it is already a text ele
 In this example below at first you can tab upon two elements, a paragraph and the p; the screenreader will read the paragraph and then read "If you need help, please contact us at Contact or visit our Help page.", another tab will go back to the paragraph, but if you press enter on the p, the focus will shift to the first link and then you can tab through the links and then exit the group by pressing escape, so Contact and Help in that internal case.
 
 ```html
-<p data-de-aria-text="true" tabindex="0">This paragraph is tabbable and can be read by screenreaders, but if you enter the dynamic group below, the focus will shift to the group.</p>
-<p data-de-aria-group="dynamic" data-de-aria-text="true" tabindex="0">
+<p data-de-aria-text tabindex="0">This paragraph is tabbable and can be read by screenreaders, but if you enter the dynamic group below, the focus will shift to the group.</p>
+<p data-de-aria-group="dynamic" data-de-aria-text tabindex="0">
     If you need help, please contact us at <a href="/contact" data-de-aria-key="c">Contact</a> or visit our <a href="/help" data-de-aria-key="h">Help</a> page.
 </p>
 ```
@@ -258,13 +258,13 @@ By default however the group is not active unless data-de-aria-group-active is s
 A static group should not have a tabindex, since it is not meant to be focused, but rather acts like a focus trap.
 
 ```html
-<p data-de-aria-text="true" tabindex="0">This paragraph is not tabbable because the focus trap is active.</p>
+<p data-de-aria-text tabindex="0">This paragraph is not tabbable because the focus trap is active.</p>
 <div data-de-aria-group="static" data-de-aria-group-active role="group">
-    <h2 data-de-aria-text="true" tabindex="0">Focus Trap</h2>
-    <p data-de-aria-text="true" tabindex="0">This is a focus trap. You cannot exit this group until you close the trap.</p>
+    <h2 data-de-aria-text tabindex="0">Focus Trap</h2>
+    <p data-de-aria-text tabindex="0">This is a focus trap. You cannot exit this group until you close the trap.</p>
     <button data-de-aria-key="c">Close Trap</button>
 </div>
-<p data-de-aria-text="true" tabindex="0">This paragraph is also not tabbable because the focus trap is active.</p>
+<p data-de-aria-text tabindex="0">This paragraph is also not tabbable because the focus trap is active.</p>
 ```
 
 #### Use Inert Instead of Tabindex Focus Traps
@@ -273,7 +273,7 @@ Use `data-de-aria-group-use-inert` to make the library use inert instead of tabi
 
 ```html
 <div data-de-aria-group="static" data-de-aria-group-use-inert data-de-aria-group-active role="dialog">
-    <h2 data-de-aria-text="true" tabindex="0">Dialog Focus Trap</h2>
+    <h2 data-de-aria-text tabindex="0">Dialog Focus Trap</h2>
 </div>
 ```
 
