@@ -24,7 +24,7 @@ function isAccessible(el) {
     if (el.hasAttribute("disabled")) return false;
     if (el.getAttribute("aria-hidden") === "true") return false;
     // @ts-ignore
-    if (typeof el.dataset.deAriaText !== "undefined") return false;
+    if (typeof el.dataset.deAriaText !== "undefined" && typeof el.dataset.deAriaKey === "undefined") return false;
     // @ts-ignore
     if (el.tagName === "IMG" && !el.dataset.deAriaKey && !el.dataset.deAriaAction) return false;
 
