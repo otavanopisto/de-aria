@@ -226,6 +226,11 @@ function warnAboutInvalids(root) {
             if (exitButton && exitButton.dataset.deAriaKey?.toLowerCase() !== "esc") {
                 console.warn(exitButton, `Element ${exitButton.tagName} has data-de-aria-group-exit but its data-de-aria-key is not set to "esc". Consider setting data-de-aria-key="esc" to indicate that it is the exit button for the group.`);
             }
+
+            // make sure the exit button has a ariaLabel
+            if (exitButton && !exitButton.ariaLabel) {
+                console.warn(exitButton, `Element ${exitButton.tagName} has data-de-aria-group-exit but is missing an aria-label. Consider adding an aria-label attribute to the exit button to indicate its purpose.`);
+            }
         }
         const role = el.getAttribute("role")?.trim().toLowerCase() || "";
         if (el.dataset.deAriaGroup && typeof el.dataset.deAriaText === "undefined" && !DE_ARIA_GROUP_ROLES.has(role)) {
@@ -497,7 +502,6 @@ function markFocusableElement(el) {
  * @param {HTMLElement} el 
  */
 function triggerFocusableElement(el) {
-
     if (el.dataset.deAriaKeyNestUsed) {
         // If this element is part of a nested group, trigger the next element in the group instead of this one.
         const nextNestNumber = el.dataset.deAriaKeyNestUsed[0];
@@ -1052,11 +1056,9 @@ function ensureConsistencyOfDOM(root, info = null) {
         }
 
         if (el.dataset.deAriaGroup === "dynamic") {
-            const exitButtons = getAllElementsListBySelector(el, "[data-de-aria-group-exit-button]", "[data-de-aria-group]");
+            const exitButtons = getAllElementsListBySelector(el, "[data-de-aria-group-exit]", "[data-de-aria-group]");
             if (isActiveGroup) {
                 for (const exitButton of exitButtons) {
-                    if (exitButton.hasAttribute("data-de-aria-group-exit-button-visible")) continue;
-                    exitButton.setAttribute("data-de-aria-group-exit-button-visible", "");
                     if (ownedClickListeners.has(exitButton)) continue;
                     const clickListener = () => {
                         delete el.dataset.deAriaGroupActive;
@@ -1067,8 +1069,6 @@ function ensureConsistencyOfDOM(root, info = null) {
                 }
             } else {
                 for (const exitButton of exitButtons) {
-                    if (!exitButton.hasAttribute("data-de-aria-group-exit-button-visible")) continue;
-                    exitButton.removeAttribute("data-de-aria-group-exit-button-visible");
                     // remove all potential click listeners added
                     const clickListener = ownedClickListeners.get(exitButton);
                     if (clickListener) {
