@@ -24,16 +24,6 @@ For physical disabilities, these groups also allow to prevent clutter, dynamic g
 
 De-aria aims to be a small change to existing websites, with its de-aria properties; however things to keep in mind are:
 
-#### ReactJS, VueJS, AngularJS, SvelteJS, etc.
-
-When using de-aria with frameworks that use virtual DOMs, you need to understand that de-aria adds custom properties to the DOM elements as they are interacted with. If the framework re-renders the DOM, these properties will be lost and de-aria will not work as expected.
-
-TODO:
-
-For that you need to use custom de-aria components, they will be analog to your standard html elements, but use shadow DOM to protect these custom attributes.
-
-Using the exposed DOM is however a cleaner approach if your project does not use a framework or if using the exposed DOM works in that specific framework or case.
-
 ## Screenreaders
 
 Screenreaders follow the application flow and are mostly unaffected since the natural flow of html allows for the usage of screenreaders easily.
@@ -233,7 +223,22 @@ In the example below at first you can tab upon two elements, a paragraph and the
     <a href="/home" data-de-aria-key="h">Home</a>
     <a href="/about" data-de-aria-key="a">About</a>
     <a href="/contact" data-de-aria-key="c">Contact</a>
+    <button data-de-aria-group-exit data-de-aria-key="esc" aria-label="Go back to Navigation">x</button>
 </div>
+```
+
+You do not want to have the data-de-aria-group-exit button to appear when the group is not active, so use css to hide it when the group is not active, for example:
+
+```css
+[data-de-aria-group-exit] {
+    display: none;
+}
+[data-de-aria-group][data-de-aria-group-active] [data-de-aria-group-exit] {
+    display: inline-block;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
 ```
 
 #### Dynamic groups, but text
@@ -246,7 +251,22 @@ In this example below at first you can tab upon two elements, a paragraph and th
 <p data-de-aria-text tabindex="0">This paragraph is tabbable and can be read by screenreaders, but if you enter the dynamic group below, the focus will shift to the group.</p>
 <p data-de-aria-group="dynamic" data-de-aria-text tabindex="0">
     If you need help, please contact us at <a href="/contact" data-de-aria-key="c">Contact</a> or visit our <a href="/help" data-de-aria-key="h">Help</a> page.
+    <button data-de-aria-group-exit data-de-aria-key="esc" aria-label="Go back to Paragraphs">x</button>
 </p>
+```
+
+You do not want to have the data-de-aria-group-exit button to appear when the group is not active, so use css to hide it when the group is not active, for example:
+
+```css
+[data-de-aria-group-exit] {
+    display: none;
+}
+[data-de-aria-group][data-de-aria-group-active] [data-de-aria-group-exit] {
+    display: inline-block;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
 ```
 
 #### Static groups

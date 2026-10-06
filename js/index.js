@@ -212,6 +212,21 @@ function warnAboutInvalids(root) {
         if (el.dataset.deAriaGroup === "static" && typeof el.dataset.deAriaText !== "undefined") {
             console.warn(el, `Element ${el.tagName} has data-de-aria-group="static" but also has data-de-aria-text. Consider removing the data-de-aria-text attribute or setting data-de-aria-group to dynamic value.`);
         }
+        if (el.dataset.deAriaGroup === "dynamic") {
+            // make sure an internal button with data-de-aria-group-exit property in it exists and is within the group, otherwise warn about it
+            const exitButtons = getAllElementsListBySelector(el, "[data-de-aria-group-exit]", "[data-de-aria-group]");
+            if (exitButtons.length === 0) {
+                console.warn(el, `Element ${el.tagName} has data-de-aria-group="dynamic" but does not have a child element with data-de-aria-group-exit. Consider adding a button or element with the data-de-aria-group-exit attribute to allow exiting the group.`);
+            } else if (exitButtons.length > 1) {
+                console.warn(el, `Element ${el.tagName} has data-de-aria-group="dynamic" but has multiple child elements with data-de-aria-group-exit. Consider having only one exit button or element to avoid confusion.`);
+            }
+
+            const exitButton = exitButtons[0];
+            // make sure the exit button data-de-aria-key is set to "esc" otherwise warn about it
+            if (exitButton && exitButton.dataset.deAriaKey?.toLowerCase() !== "esc") {
+                console.warn(exitButton, `Element ${exitButton.tagName} has data-de-aria-group-exit but its data-de-aria-key is not set to "esc". Consider setting data-de-aria-key="esc" to indicate that it is the exit button for the group.`);
+            }
+        }
         const role = el.getAttribute("role")?.trim().toLowerCase() || "";
         if (el.dataset.deAriaGroup && typeof el.dataset.deAriaText === "undefined" && !DE_ARIA_GROUP_ROLES.has(role)) {
             console.warn(el, `Element ${el.tagName} has data-de-aria-group but does not use role="group", role="dialog", or role="alertdialog", and it is not a text element with data-de-aria-text. Consider adding the role that matches the element's purpose.`);
@@ -872,6 +887,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const isActivationKey = e.key === "Enter" || e.key === " ";
+        // @ts-ignore
         const focusedIsDeAriaGroup = currentlyFocused && typeof currentlyFocused.dataset.deAriaGroup !== "undefined";
 
         if (
@@ -897,6 +913,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (currentlyActiveDeAriaGroup !== currentlyFocused) {
                 e.preventDefault();
                 if (currentlyActiveDeAriaGroup) delete currentlyActiveDeAriaGroup.dataset.deAriaGroupActive;
+                // @ts-ignore
                 currentlyFocused.dataset.deAriaGroupActive = "";
                 setTimeout(() => {
                     getSpecificElementBySelector(currentlyFocused, FOCUSABLE_SELECTOR)?.focus();
@@ -980,11 +997,13 @@ function makeShadowRootsAdoptAccessibilityStyles(sheets, root) {
     }
 }
 
+const ownedClickListeners = new WeakMap();
+
 /**
  * @param {Document | HTMLElement} root
  * @param {{
  *    groupActive: Document | HTMLElement,
- *    groupActiveUseInert: boolean
+ *    groupActiveUseInert: boolean,
  * } | null} info
  */
 function ensureConsistencyOfDOM(root, info = null) {
@@ -992,7 +1011,7 @@ function ensureConsistencyOfDOM(root, info = null) {
         const groupActive = getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`) || document;
         info = {
             groupActive: groupActive,
-            // @ts-ignore
+            // @ts-ignore typescript is wrong, because I already made sure it wasn't document
             groupActiveUseInert: groupActive !== document ? typeof groupActive.dataset.deAriaGroupUseInert !== "undefined" : false,
         };
     }
@@ -1001,10 +1020,12 @@ function ensureConsistencyOfDOM(root, info = null) {
     // we want to disable all
     const focusableElements = getAllElementsListBySelector(root, FOCUSABLE_SELECTOR, "[data-de-aria-group]");
 
-    const isActiveGroup = root === info.groupActive;
+    const isWithinActiveGroup = root === info.groupActive;
 
     for (const el of focusableElements) {
-        if (isActiveGroup || info.groupActiveUseInert) {
+        const isActiveGroup = el === info.groupActive;
+
+        if (isWithinActiveGroup || info.groupActiveUseInert) {
             const expectedTabIndex = el.dataset.dataDeAriaGroupOriginalTabIndex ? Number(el.dataset.dataDeAriaGroupOriginalTabIndex) : el.tabIndex;
             if (el.tabIndex !== expectedTabIndex) {
                 el.tabIndex = expectedTabIndex;
@@ -1017,7 +1038,7 @@ function ensureConsistencyOfDOM(root, info = null) {
             }
         }
 
-        if (isActiveGroup || !info.groupActiveUseInert) {
+        if (isWithinActiveGroup || !info.groupActiveUseInert) {
             const expectedInert = el.dataset.dataDeAriaGroupOriginalInert === "true" ? true : false;
             if (el.inert !== expectedInert) {
                 el.inert = expectedInert;
@@ -1027,6 +1048,34 @@ function ensureConsistencyOfDOM(root, info = null) {
             if (el.inert !== expectedInert) {
                 el.dataset.dataDeAriaGroupOriginalInert = String(el.inert);
                 el.inert = true;
+            }
+        }
+
+        if (el.dataset.deAriaGroup === "dynamic") {
+            const exitButtons = getAllElementsListBySelector(el, "[data-de-aria-group-exit-button]", "[data-de-aria-group]");
+            if (isActiveGroup) {
+                for (const exitButton of exitButtons) {
+                    if (exitButton.hasAttribute("data-de-aria-group-exit-button-visible")) continue;
+                    exitButton.setAttribute("data-de-aria-group-exit-button-visible", "");
+                    if (ownedClickListeners.has(exitButton)) continue;
+                    const clickListener = () => {
+                        delete el.dataset.deAriaGroupActive;
+                        el.focus();
+                    };
+                    exitButton.addEventListener("click", clickListener, { once: true });
+                    ownedClickListeners.set(exitButton, clickListener);
+                }
+            } else {
+                for (const exitButton of exitButtons) {
+                    if (!exitButton.hasAttribute("data-de-aria-group-exit-button-visible")) continue;
+                    exitButton.removeAttribute("data-de-aria-group-exit-button-visible");
+                    // remove all potential click listeners added
+                    const clickListener = ownedClickListeners.get(exitButton);
+                    if (clickListener) {
+                        exitButton.removeEventListener("click", clickListener);
+                        ownedClickListeners.delete(exitButton);
+                    }
+                }
             }
         }
     }
