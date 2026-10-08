@@ -331,6 +331,7 @@ Additional data attributes available for CSS hooks:
 | Attribute | Values | Description |
 |---|---|---|
 | `data-de-aria-indicator-for` | key character | The trigger key this badge belongs to |
+| `data-de-aria-direction` | `ltr`, `rtl` | Writing direction of the element the badge belongs to |
 
 ### Marked elements: `.de-aria-marked`
 
