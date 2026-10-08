@@ -180,13 +180,14 @@ function getDeepActiveElement() {
 
 /**
  * Exit a group and reactivate its nearest ancestor group, regardless of type,
- * crossing shadow root boundaries through their hosts.
+ * following assigned slots before DOM parents and crossing shadow root
+ * boundaries through their hosts.
  * @param {HTMLElement} el
  */
 function exitDeAriaGroup(el) {
     el.removeAttribute("data-de-aria-group-active");
 
-    let node = el.parentNode;
+    let node = el.assignedSlot || el.parentNode;
     while (node && node !== document) {
         if (node.nodeType === 11 /* DOCUMENT_FRAGMENT_NODE */) {
             node = /** @type {ShadowRoot} */ (node).host;
@@ -198,8 +199,10 @@ function exitDeAriaGroup(el) {
                 ancestor.setAttribute("data-de-aria-group-active", "");
                 return;
             }
+            node = ancestor.assignedSlot || ancestor.parentNode;
+        } else {
+            node = node.parentNode;
         }
-        node = node.parentNode;
     }
 }
 
