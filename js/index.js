@@ -190,6 +190,34 @@ function getDeepActiveElement() {
 }
 
 /**
+ * Exit a group and reactivate its nearest ancestor group, regardless of type,
+ * following assigned slots before DOM parents and crossing shadow root
+ * boundaries through their hosts.
+ * @param {HTMLElement} el
+ */
+function exitDeAriaGroup(el) {
+    el.removeAttribute("data-de-aria-group-active");
+
+    let node = el.assignedSlot || el.parentNode;
+    while (node && node !== document) {
+        if (node.nodeType === 11 /* DOCUMENT_FRAGMENT_NODE */) {
+            node = /** @type {ShadowRoot} */ (node).host;
+            continue;
+        }
+        if (node.nodeType === 1 /* ELEMENT_NODE */) {
+            const ancestor = /** @type {Element} */ (node);
+            if (ancestor.hasAttribute("data-de-aria-group")) {
+                ancestor.setAttribute("data-de-aria-group-active", "");
+                return;
+            }
+            node = ancestor.assignedSlot || ancestor.parentNode;
+        } else {
+            node = node.parentNode;
+        }
+    }
+}
+
+/**
  * @param {Document | HTMLElement} root 
  */
 function warnAboutInvalids(root) {
@@ -983,7 +1011,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (currentlyActiveDeAriaGroup) {
                 const isStatic = currentlyActiveDeAriaGroup.getAttribute("data-de-aria-group") === "static";
                 if (!isStatic) {
-                    currentlyActiveDeAriaGroup.removeAttribute("data-de-aria-group-active");
+                    exitDeAriaGroup(currentlyActiveDeAriaGroup);
                     e.stopImmediatePropagation();
                     e.stopPropagation();
                     e.preventDefault();
@@ -1114,7 +1142,7 @@ function ensureConsistencyOfDOM(root, info = null) {
                 for (const exitButton of exitButtons) {
                     if (ownedClickListeners.has(exitButton)) continue;
                     const clickListener = () => {
-                        el.removeAttribute("data-de-aria-group-active");
+                        exitDeAriaGroup(el);
                         el.focus();
                     };
                     exitButton.addEventListener("click", clickListener, { once: true });
