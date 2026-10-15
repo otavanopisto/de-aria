@@ -1,3 +1,14 @@
+// @ts-ignore
+window.DEARIA = window.DEARIA || {};
+// @ts-ignore
+window.DEARIA.noWarnings = window.DEARIA.noWarnings || false;
+// @ts-ignore
+window.DEARIA.locationWhiteList = window.DEARIA.locationWhiteList || ["*"];
+// @ts-ignore
+window.DEARIA.enableTooltips = window.DEARIA.enableTooltips || (() => true);
+// @ts-ignore
+window.DEARIA.enabled = typeof window.DEARIA.enabled === "boolean" ? window.DEARIA.enabled : true;
+
 const FOCUSABLE_SELECTOR_NO_TABINDEX = [
     "a[href]",
     "button",
@@ -252,7 +263,7 @@ function warnAboutInvalids(root) {
  */
 function showAccessibility(currentlyActiveDeAriaGroupOverride) {
     // @ts-ignore
-    if (!window.__deAriaNoWarnings) {
+    if (!window.DEARIA.noWarnings && window.DEARIA.enabled) {
         warnAboutInvalids(document);
     }
 
@@ -828,6 +839,47 @@ document.addEventListener("DOMContentLoaded", () => {
     const arrowKeys = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageUp", "PageDown"]);
 
     document.addEventListener("keydown", (e) => {
+        // @ts-ignore
+        if (!window.DEARIA.enabled) {
+            return;
+        }
+
+        // @ts-ignore
+        if (!window.DEARIA.enableTooltips()) {
+            return;
+        }
+
+        /**
+         * @type {string[]}
+         */
+        const whitelist =
+            // @ts-ignore
+            window.DEARIA.locationWhitelist || ["*"];
+        
+        /**
+         * @type {boolean}
+         */
+        const isWhitelisted = whitelist.some(pattern => {
+            if (pattern === "*") return true;
+            const pathname = window.location.pathname;
+            // Build a regex from the path pattern:
+            //   :param  → matches one path segment (no slashes)
+            //   *       → matches any subpath (including slashes)
+            const regexStr = pattern
+                .split("*")
+                .map(segment =>
+                    segment
+                        .replace(/[.+?^${}()|[\]\\]/g, "\\$&") // escape regex special chars
+                        .replace(/:([^/]+)/g, "[^/]+")           // :param → any segment
+                )
+                .join(".*");
+            return new RegExp("^" + regexStr + "$").test(pathname);
+        });
+
+        if (!isWhitelisted) {
+            return;
+        }
+
         const isAccessibilityVisible = getSpecificElementBySelector(document, ".de-aria-key-indicator") !== null || getSpecificElementBySelector(document, ".de-aria-scroll-marked") !== null;
         if (e.key === "Control") {
             makeShadowRootsAdoptAccessibilityStyles(figureConstructedSheets(), document);
