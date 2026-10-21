@@ -1111,27 +1111,27 @@ function ensureConsistencyOfDOM(root, info = null) {
         const isActiveGroup = el === info.groupActive;
 
         if (isWithinActiveGroup || info.groupActiveUseInert) {
-            const expectedTabIndex = el.getAttribute("data-data-de-aria-group-original-tab-index") ? Number(el.getAttribute("data-data-de-aria-group-original-tab-index")) : el.tabIndex;
+            const expectedTabIndex = el.getAttribute("data-de-aria-group-original-tab-index") ? Number(el.getAttribute("data-de-aria-group-original-tab-index")) : el.tabIndex;
             if (el.tabIndex !== expectedTabIndex) {
                 el.tabIndex = expectedTabIndex;
             }
         } else {
             const expectedTabIndex = -1;
             if (el.tabIndex !== expectedTabIndex) {
-                el.setAttribute("data-data-de-aria-group-original-tab-index", String(el.tabIndex));
+                el.setAttribute("data-de-aria-group-original-tab-index", String(el.tabIndex));
                 el.tabIndex = -1;
             }
         }
 
         if (isWithinActiveGroup || !info.groupActiveUseInert) {
-            const expectedInert = el.getAttribute("data-data-de-aria-group-original-inert") === "true" ? true : false;
+            const expectedInert = el.getAttribute("data-de-aria-group-original-inert") === "true" ? true : false;
             if (el.inert !== expectedInert) {
                 el.inert = expectedInert;
             }
         } else {
             const expectedInert = true;
             if (el.inert !== expectedInert) {
-                el.setAttribute("data-data-de-aria-group-original-inert", String(el.inert));
+                el.setAttribute("data-de-aria-group-original-inert", String(el.inert));
                 el.inert = true;
             }
         }
