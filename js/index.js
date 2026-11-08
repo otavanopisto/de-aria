@@ -1,13 +1,27 @@
-// @ts-ignore
-window.DEARIA = window.DEARIA || {};
-// @ts-ignore
-window.DEARIA.noWarnings = window.DEARIA.noWarnings || false;
-// @ts-ignore
-window.DEARIA.locationWhiteList = window.DEARIA.locationWhiteList || ["*"];
-// @ts-ignore
-window.DEARIA.enableTooltips = window.DEARIA.enableTooltips || (() => true);
-// @ts-ignore
-window.DEARIA.enabled = typeof window.DEARIA.enabled === "boolean" ? window.DEARIA.enabled : true;
+/**
+ * Configuration supplied through window.DEARIA before this script loads.
+ * @typedef {Object} DEAriaConfig
+ * @property {boolean} noWarnings disable warnings about invalid elements in the DOM that don't fit the de-aria specification
+ * @property {string[]} locationWhiteList a white list of locations where the accessibility of de-aria is enabled
+ * @property {() => boolean} enableTooltips
+ * @property {boolean} enabled
+ * @property {boolean} enableKeyShortcuts
+ * @property {boolean} enableGroups
+ * @property {boolean} enableText
+ * @property {string[]} locationWhitelist Used by the tooltip location filter.
+ */
+
+// This reference points to the browser window; the defaults below complete its configuration.
+const deAriaWindow = /** @type {typeof window & { DEARIA: DEAriaConfig }} */ (window);
+
+deAriaWindow.DEARIA = deAriaWindow.DEARIA || /** @type {DEAriaConfig} */ ({});
+deAriaWindow.DEARIA.noWarnings = deAriaWindow.DEARIA.noWarnings || false;
+deAriaWindow.DEARIA.locationWhiteList = deAriaWindow.DEARIA.locationWhiteList || ["*"];
+deAriaWindow.DEARIA.enableTooltips = deAriaWindow.DEARIA.enableTooltips || (() => true);
+deAriaWindow.DEARIA.enabled = typeof deAriaWindow.DEARIA.enabled === "boolean" ? deAriaWindow.DEARIA.enabled : true;
+deAriaWindow.DEARIA.enableKeyShortcuts = typeof deAriaWindow.DEARIA.enableKeyShortcuts === "boolean" ? deAriaWindow.DEARIA.enableKeyShortcuts : true;
+deAriaWindow.DEARIA.enableGroups = typeof deAriaWindow.DEARIA.enableGroups === "boolean" ? deAriaWindow.DEARIA.enableGroups : true;
+deAriaWindow.DEARIA.enableText = typeof deAriaWindow.DEARIA.enableText === "boolean" ? deAriaWindow.DEARIA.enableText : true;
 
 const FOCUSABLE_SELECTOR_NO_TABINDEX = [
     "a[href]",
@@ -26,18 +40,57 @@ const FOCUSABLE_SELECTOR = FOCUSABLE_SELECTOR_NO_TABINDEX + "," + "[tabindex]";
 
 const DE_ARIA_GROUP_ROLES = new Set(["group", "dialog", "alertdialog"]);
 
+function isWhiteListedLocation() {
+    /**
+         * @type {string[]}
+         */
+    const whitelist =
+        deAriaWindow.DEARIA.locationWhitelist || ["*"];
+
+    /**
+     * @type {boolean}
+     */
+    const isWhitelisted = whitelist.some(pattern => {
+        if (pattern === "*") return true;
+        const pathname = window.location.pathname;
+        // Build a regex from the path pattern:
+        //   :param  → matches one path segment (no slashes)
+        //   *       → matches any subpath (including slashes)
+        const regexStr = pattern
+            .split("*")
+            .map(segment =>
+                segment
+                    .replace(/[.+?^${}()|[\]\\]/g, "\\$&") // escape regex special chars
+                    .replace(/:([^/]+)/g, "[^/]+")           // :param → any segment
+            )
+            .join(".*");
+        return new RegExp("^" + regexStr + "$").test(pathname);
+    });
+
+    return isWhitelisted;
+}
+
 /**
- *
+ * This function is really used for the keyboard shortcut accessibility check
  * @param {Element} el 
  * @returns {boolean}
  */
-function isAccessible(el) {
+function isAccessibleForKeyboardShortcuts(el) {
     if (el.hasAttribute("disabled")) return false;
     if (el.getAttribute("aria-hidden") === "true") return false;
     // @ts-ignore
     if (el.hasAttribute("data-de-aria-text") && !el.hasAttribute("data-de-aria-key")) return false;
     // @ts-ignore
     if (el.tagName === "IMG" && !el.getAttribute("data-de-aria-key") && !el.getAttribute("data-de-aria-action")) return false;
+
+    // disable dynamic groups if the feature is disabled, even if the element is otherwise accessible.
+    if (el.getAttribute("data-de-aria-group") === "dynamic" && !deAriaWindow.DEARIA.enableGroups) return false;
+
+    // disable static groups if the feature is disabled, even if the element is otherwise accessible.
+    if (el.hasAttribute("data-de-aria-group") && !deAriaWindow.DEARIA.enableGroups) return false;
+
+    // disable text elements if the feature is disabled, even if the element is otherwise accessible.
+    if (el.hasAttribute("data-de-aria-text") && !deAriaWindow.DEARIA.enableText) return false;
 
     // Walk up the tree checking for inert / hidden ancestors, crossing shadow root boundaries.
     // @ts-ignore
@@ -290,8 +343,9 @@ function warnAboutInvalids(root) {
  * @param {HTMLElement | Document} [currentlyActiveDeAriaGroupOverride]
  */
 function showAccessibility(currentlyActiveDeAriaGroupOverride) {
-    // @ts-ignore
-    if (!window.DEARIA.noWarnings && window.DEARIA.enabled) {
+    if (!deAriaWindow.DEARIA.enableKeyShortcuts) return;
+
+    if (!deAriaWindow.DEARIA.noWarnings && deAriaWindow.DEARIA.enabled) {
         warnAboutInvalids(document);
     }
 
@@ -299,7 +353,7 @@ function showAccessibility(currentlyActiveDeAriaGroupOverride) {
     showAccessibilityFocusables(currentlyActiveDeAriaGroup);
 
     const scroller = getAllElementsListBySelector(currentlyActiveDeAriaGroup, '[data-de-aria-scroller]', "[data-de-aria-group]")
-        .find(isAccessible) || null;
+        .find(isAccessibleForKeyboardShortcuts) || null;
 
     if (scroller) {
         // @ts-ignore
@@ -312,8 +366,8 @@ function showAccessibility(currentlyActiveDeAriaGroupOverride) {
  */
 function showAccessibilityFocusables(parent) {
     const focusable = getAllElementsListBySelector(parent, FOCUSABLE_SELECTOR, "[data-de-aria-group]")
-        .filter(isAccessible).filter(el => !el.hasAttribute("data-de-aria-scroller")); // don't mark scroller elements as focusable
-    
+        .filter(isAccessibleForKeyboardShortcuts).filter(el => !el.hasAttribute("data-de-aria-scroller")); // don't mark scroller elements as focusable
+
     for (const el of focusable) {
         // @ts-ignore
         markFocusableElement(el);
@@ -358,49 +412,6 @@ function handleDuplicates(focusableElements) {
             }
         });
     }
-}
-
-/**
- * Walk up the DOM from `el` (crossing shadow root boundaries) and return the
- * intersection of all clipping ancestors' bounding rects in viewport coords.
- * Returns null if no clipping ancestor is found (no clip needed).
- * @param {HTMLElement} el
- * @returns {{ top: number, right: number, bottom: number, left: number } | null}
- */
-function getClippingRect(el) {
-    let clip = { top: 0, right: window.innerWidth, bottom: window.innerHeight, left: 0 };
-    let found = false;
-
-    /** @type {any} */
-    let node = el.parentNode;
-    while (node && node !== document) {
-        // Cross shadow root boundaries
-        if (node.nodeType === 11 /* DOCUMENT_FRAGMENT_NODE */) {
-            node = node.host;
-            continue;
-        }
-        if (node.nodeType !== 1) {
-            node = node.parentNode;
-            continue;
-        }
-
-        const style = getComputedStyle(node);
-        const overflow = style.overflow + " " + style.overflowX + " " + style.overflowY;
-        const clips = overflow.includes("hidden") || overflow.includes("auto") || overflow.includes("scroll") || overflow.includes("clip");
-
-        if (clips) {
-            const r = node.getBoundingClientRect();
-            clip.top    = Math.max(clip.top,    r.top);
-            clip.right  = Math.min(clip.right,  r.right);
-            clip.bottom = Math.min(clip.bottom, r.bottom);
-            clip.left   = Math.max(clip.left,   r.left);
-            found = true;
-        }
-
-        node = node.parentNode;
-    }
-
-    return found ? clip : null;
 }
 
 /**
@@ -477,10 +488,10 @@ function markFocusableElement(el) {
     // Convert the element's viewport-space rect into the containing block's
     // coordinate space (origin = top-left of unscrolled content of cb).
     const rect = el.getBoundingClientRect();
-    const elTop    = rect.top - cbRect.top;
-    const elLeft   = rect.left - cbRect.left;
-    const elBottom = elTop  + rect.height;
-    const elRight  = elLeft + rect.width;
+    const elTop = rect.top - cbRect.top;
+    const elLeft = rect.left - cbRect.left;
+    const elBottom = elTop + rect.height;
+    const elRight = elLeft + rect.width;
 
     if (positionV === "top-inside") {
         indicator.style.top = `${elTop}px`;
@@ -554,40 +565,40 @@ function triggerFocusableElement(el) {
         if (indicator) {
             indicator.textContent = nextNestNumber + newNestNumber;
         }
-        return {continueAccessibility: true, continueAccessibilityOnGroup: null, ranFocus: false};
+        return { continueAccessibility: true, continueAccessibilityOnGroup: null, ranFocus: false };
     }
 
     const action = el.getAttribute("data-de-aria-action") || "default";
 
     if (action === "none") {
-        return {continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: false};
+        return { continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: false };
     }
 
     if (action === "click" || action === "default" && isClickable(el)) {
         el.click();
-        return {continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: false};
+        return { continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: false };
     }
 
     if (action === "focus" || action === "default" && isFocusInput(el)) {
         el.focus();
-        return {continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: true};
+        return { continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: true };
     }
 
     if (action === "play" || action === "default" && isMedia(el)) {
         const media = /** @type {HTMLMediaElement} */ (el);
         if (media.paused) media.play();
         else media.pause();
-        return {continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: false};
+        return { continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: false };
     }
 
     if (el.hasAttribute("data-de-aria-group")) {
         // if this element represents a group, then show the accessibility within it
-        return {continueAccessibility: false, continueAccessibilityOnGroup: el, ranFocus: false};
+        return { continueAccessibility: false, continueAccessibilityOnGroup: el, ranFocus: false };
     } else {
         // Final fallback for "default" — just focus the element.
         el.focus();
 
-        return {continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: true};
+        return { continueAccessibility: false, continueAccessibilityOnGroup: null, ranFocus: true };
     }
 }
 
@@ -867,42 +878,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const arrowKeys = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageUp", "PageDown"]);
 
     document.addEventListener("keydown", (e) => {
-        // @ts-ignore
-        if (!window.DEARIA.enabled) {
+        if (!deAriaWindow.DEARIA.enabled) {
             return;
         }
 
-        // @ts-ignore
-        if (!window.DEARIA.enableTooltips()) {
+        if (!deAriaWindow.DEARIA.enableTooltips()) {
             return;
         }
 
-        /**
-         * @type {string[]}
-         */
-        const whitelist =
-            // @ts-ignore
-            window.DEARIA.locationWhitelist || ["*"];
-        
-        /**
-         * @type {boolean}
-         */
-        const isWhitelisted = whitelist.some(pattern => {
-            if (pattern === "*") return true;
-            const pathname = window.location.pathname;
-            // Build a regex from the path pattern:
-            //   :param  → matches one path segment (no slashes)
-            //   *       → matches any subpath (including slashes)
-            const regexStr = pattern
-                .split("*")
-                .map(segment =>
-                    segment
-                        .replace(/[.+?^${}()|[\]\\]/g, "\\$&") // escape regex special chars
-                        .replace(/:([^/]+)/g, "[^/]+")           // :param → any segment
-                )
-                .join(".*");
-            return new RegExp("^" + regexStr + "$").test(pathname);
-        });
+        const isWhitelisted = isWhiteListedLocation();
 
         if (!isWhitelisted) {
             return;
@@ -963,7 +947,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const currentlyActiveDeAriaGroup = getSpecificElementBySelectorLast(document, `[data-de-aria-group-active]`) || document;
 
             const currentScroller = getAllElementsListBySelector(currentlyActiveDeAriaGroup, '[data-de-aria-scroller]', "[data-de-aria-group]")
-                .find(isAccessible) || null;
+                .find(isAccessibleForKeyboardShortcuts) || null;
 
             if (currentScroller) {
                 // @ts-ignore
@@ -1168,13 +1152,64 @@ function ensureConsistencyOfDOM(root, info = null) {
     }
 }
 
-ensureConsistencyOfDOM(document);
+const isWhiteListed = isWhiteListedLocation();
+if (isWhiteListed && deAriaWindow.DEARIA.enabled && deAriaWindow.DEARIA.enableGroups) {
+    ensureConsistencyOfDOM(document);
+}
+
+if (!isWhiteListed || !deAriaWindow.DEARIA.enableText || !deAriaWindow.DEARIA.enabled) {
+    deleteAllTextTabIndexes();
+}
 
 /**
  * @param {MutationRecord[]} mutationsList
  */
 function realMutationObserverCallback(mutationsList) {
-    ensureConsistencyOfDOM(document);
+    const isWhiteListed = isWhiteListedLocation();
+    if (isWhiteListed && deAriaWindow.DEARIA.enabled && deAriaWindow.DEARIA.enableGroups) {
+        ensureConsistencyOfDOM(document);
+    }
+
+    if (!isWhiteListed || !deAriaWindow.DEARIA.enableText || !deAriaWindow.DEARIA.enabled) {
+        deleteAllTextTabIndexes();
+    }
+}
+
+/**
+ * Remove text elements from the tab order, including the root itself and all
+ * light-DOM and exposed shadow-root descendants. Preserve the first tab index.
+ * @param {Document | Element | ShadowRoot} [root]
+ */
+function deleteAllTextTabIndexes(root = document) {
+    /** @type {Set<Node>} */
+    const visited = new Set();
+
+    /** @param {Node} node */
+    function visit(node) {
+        if (visited.has(node)) return;
+        visited.add(node);
+
+        if (node.nodeType === 1 /* ELEMENT_NODE */) {
+            const el = /** @type {Element & { tabIndex: number, root?: Node }} */ (node);
+            if (el.hasAttribute("data-de-aria-text")) {
+                if (!el.hasAttribute("data-de-aria-original-tabindex")) {
+                    el.setAttribute("data-de-aria-original-tabindex", String(el.tabIndex));
+                }
+                if (el.getAttribute("tabindex") !== "-1") {
+                    el.setAttribute("tabindex", "-1");
+                }
+            }
+
+            const shadow = el.shadowRoot || el.root;
+            if (shadow) visit(shadow);
+        }
+
+        for (const child of node.childNodes) {
+            visit(child);
+        }
+    }
+
+    visit(root);
 }
 
 /** @type {WeakSet<Node>} */
@@ -1185,7 +1220,7 @@ const observer = new MutationObserver((mutationsList) => {
     for (const mutation of mutationsList) {
         for (const node of mutation.addedNodes) {
             if (node.nodeType === Node.ELEMENT_NODE) {
-                observeShadowRoots(/** @type {Element} */ (node));
+                observeShadowRoots(/** @type {Element} */(node));
             }
         }
     }

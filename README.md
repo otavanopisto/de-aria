@@ -46,6 +46,62 @@ You can test with a voice driven accessibility suite, eg. like Talon.
 
 Import the script as an ES module. No framework or build step required.
 
+## Window configuration
+
+Set `window.DEARIA` before loading the module. The name is case-sensitive and uses uppercase `DEARIA`. Supply only the options you need; omitted options use the defaults below.
+
+```html
+<script>
+    window.DEARIA = {
+        noWarnings: false,
+        enabled: true,
+        enableKeyShortcuts: true,
+        enableGroups: true,
+        enableText: true,
+        enableTooltips: () => true,
+        locationWhitelist: ["*"],
+    };
+</script>
+<script type="module" src="js/index.js"></script>
+```
+
+| Option | Type | Default | Behaviour |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | Enables de-aria keyboard handling and group tab-order management. When false, text elements are also removed from the tab order. |
+| `noWarnings` | `boolean` | `false` | Suppresses console warnings about markup that does not follow de-aria's conventions. |
+| `enableKeyShortcuts` | `boolean` | `true` | Allows keyboard shortcut hints to be shown. Setting it to false does not disable group tab-order management or text handling. |
+| `enableGroups` | `boolean` | `true` | Enables group tab-order management and includes group elements among shortcut candidates. |
+| `enableText` | `boolean` | `true` | Keeps text elements available for de-aria navigation. When false, all `[data-de-aria-text]` elements receive `tabindex="-1"`, including elements inside exposed shadow roots. |
+| `enableTooltips` | `() => boolean` | `() => true` | Callback evaluated on each keydown. Returning false skips de-aria's keydown handling for that event, including shortcut activation and group keyboard handling. Supply a function, not a boolean. |
+| `locationWhitelist` | `string[]` | `["*"]` | Path patterns where de-aria keyboard handling and group tab-order management are enabled. Outside these paths, text elements are removed from the tab order. An empty array matches no paths. |
+
+Use actual booleans for the boolean options: `false` disables an option; the string `"false"` does not.
+
+### Path matching
+
+`locationWhitelist` matches the whole `window.location.pathname`, excluding the query string and hash. A `*` matches any sequence of characters, including slashes; a `:name` placeholder matches one non-empty path segment.
+
+```js
+window.DEARIA = {
+    locationWhitelist: ["/", "/articles/*", "/users/:id"],
+};
+```
+
+This permits `/`, paths under `/articles/`, and paths such as `/users/42`. The last pattern does not match `/users/42/settings`.
+
+The current implementation initializes a separate property spelled `locationWhiteList` (capital `L` in `List`), but the path filter reads `locationWhitelist`. Use `locationWhitelist` as shown above; setting only `locationWhiteList` does not restrict paths.
+
+### Changing options after startup
+
+The library reads options from `window.DEARIA` during keyboard events and observed DOM mutations. You can update individual properties, for example:
+
+```js
+window.DEARIA.noWarnings = true;
+window.DEARIA.enableTooltips = () => !document.body.classList.contains("editing");
+```
+
+Property changes do not immediately refresh the page's tab order or hide existing hints. Group and text tab-order management runs at initialization and on observed DOM mutations. When text elements are removed from the tab order, their original numeric tab index is saved in `data-de-aria-original-tabindex` only if that attribute is absent. Re-enabling text or changing the allowed path does not automatically restore those saved values. Configure these options before loading the module when possible.
+
 ## HTML Attributes
 
 These are the attributes you place on your own elements to control behaviour. All attribute names follow the `data-de-aria-*` convention.
@@ -419,4 +475,4 @@ document.getElementById('app').inert = false;
 
 ## Disabling Warnings
 
-Use `window.__deAriaNoWarnings = true` to disable console warnings about missing `data-de-aria-key` attributes and other non-critical issues.
+Set `window.DEARIA.noWarnings = true` to disable console warnings about missing `data-de-aria-key` attributes and other non-critical markup issues. To suppress warnings from the first accessibility interaction, set it before loading the module. See [Window configuration](#window-configuration) for all options.
