@@ -313,6 +313,13 @@ function warnAboutInvalids(root) {
                 console.warn(el, `Element ${el.tagName} has data-de-aria-group="dynamic" but has multiple child elements with data-de-aria-group-exit. Consider having only one exit button or element to avoid confusion.`);
             }
 
+            const enterIndicators = getAllElementsListBySelector(el, "[data-de-aria-group-enter-indicator]", "[data-de-aria-group]");
+            if (enterIndicators.length === 0) {
+                console.warn(el, `Element ${el.tagName} has data-de-aria-group="dynamic" but does not have a child element with data-de-aria-group-enter-indicator. Consider adding an element with the data-de-aria-group-enter-indicator attribute to indicate how to enter the group.`);
+            } else if (enterIndicators.length > 1) {
+                console.warn(el, `Element ${el.tagName} has data-de-aria-group="dynamic" but has multiple child elements with data-de-aria-group-enter-indicator. Consider having only one enter indicator element to avoid confusion.`);
+            }
+
             const exitButton = exitButtons[0];
             // make sure the exit button data-de-aria-key is set to "esc" otherwise warn about it
             if (exitButton && exitButton.getAttribute("data-de-aria-key")?.toLowerCase() !== "esc") {
@@ -322,6 +329,36 @@ function warnAboutInvalids(root) {
             // make sure the exit button has a ariaLabel
             if (exitButton && !exitButton.ariaLabel) {
                 console.warn(exitButton, `Element ${exitButton.tagName} has data-de-aria-group-exit but is missing an aria-label. Consider adding an aria-label attribute to the exit button to indicate its purpose.`);
+            }
+
+            const enterIndicator = enterIndicators[0];
+
+            if (enterIndicator && !enterIndicator.ariaLabel) {
+                console.warn(enterIndicator, `Element ${enterIndicator.tagName} has data-de-aria-group-enter-indicator but is missing an aria-label. Consider adding an aria-label attribute to indicate its purpose to visually impaired users.`);
+            }
+
+            // check that the enter indicator value is top-start, top-end, bottom-start or bottom-end
+            if (enterIndicator) {
+                const position = enterIndicator.getAttribute("data-de-aria-group-enter-indicator");
+                if (!["top-start", "top-end", "bottom-start", "bottom-end"].includes(position || "")) {
+                    console.warn(enterIndicator, `Element ${enterIndicator.tagName} has data-de-aria-group-enter-indicator but its data-de-aria-group-enter-indicator is not set to a valid value. Consider setting it to "top-start", "top-end", "bottom-start" or "bottom-end".`);
+                }
+            }
+
+            // check that the enter indicator is not a focusable element
+            if (enterIndicator && enterIndicator.matches(FOCUSABLE_SELECTOR)) {
+                console.warn(enterIndicator, `Element ${enterIndicator.tagName} has data-de-aria-group-enter-indicator but is a focusable element. Consider making it non-focusable to avoid confusion.`);
+            }
+
+            // it cannot be aria-hidden
+            if (enterIndicator && enterIndicator.hasAttribute("aria-hidden")) {
+                console.warn(enterIndicator, `Element ${enterIndicator.tagName} has data-de-aria-group-enter-indicator but has aria-hidden attribute. Consider removing the aria-hidden attribute to ensure it is accessible to screen readers.`);
+            }
+
+            // ensure that the dynamic group has a position fixed, absolute, sticky or relative, otherwise warn about it
+            const style = getComputedStyle(el);
+            if (style.position !== "fixed" && style.position !== "absolute" && style.position !== "sticky" && style.position !== "relative") {
+                console.warn(el, `Element ${el.tagName} has data-de-aria-group="dynamic" but its position is not fixed, absolute, sticky or relative. Consider setting position: relative, absolute, sticky or fixed to ensure proper positioning of the group.`);
             }
         }
         const role = el.getAttribute("role")?.trim().toLowerCase() || "";
@@ -461,7 +498,7 @@ function markFocusableElement(el) {
     indicator.style.visibility = "hidden"; // hide until positioned to avoid flash
     (el.parentElement || document.body).appendChild(indicator);
 
-    if (el.parentElement) {
+    if (el.parentElement && !deAriaWindow.DEARIA.noWarnings) {
         // check that the position is relative or absolute, if not emit a warning that the indicator may be misaligned and suggest adding `position: relative` to the parent element or using `data-de-aria-indicator-class` to specify a custom class for better control over indicator positioning
         const parentStyle = getComputedStyle(el.parentElement);
         if (parentStyle.position !== "relative" && parentStyle.position !== "absolute" && parentStyle.position !== "fixed" && parentStyle.position !== "sticky") {
