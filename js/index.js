@@ -333,6 +333,10 @@ function warnAboutInvalids(root) {
 
             const enterIndicator = enterIndicators[0];
 
+            if (enterIndicator && enterIndicator.getAttribute("role")?.trim().toLowerCase() !== "tooltip") {
+                console.warn(enterIndicator, `Element ${enterIndicator.tagName} has data-de-aria-group-enter-indicator but does not use role="tooltip". Consider setting role="tooltip" to indicate its purpose.`);
+            }
+
             if (enterIndicator && !enterIndicator.ariaLabel) {
                 console.warn(enterIndicator, `Element ${enterIndicator.tagName} has data-de-aria-group-enter-indicator but is missing an aria-label. Consider adding an aria-label attribute to indicate its purpose to visually impaired users.`);
             }

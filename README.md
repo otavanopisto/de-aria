@@ -275,7 +275,8 @@ In the example below at first you can tab upon two elements, a paragraph and the
 
 ```html
 <p data-de-aria-text tabindex="0">This paragraph is tabbable and can be read by screenreaders, but if you enter the dynamic group below, the focus will shift to the group.</p>
-<div data-de-aria-group="dynamic" tabindex="0" data-de-aria-key="g" aria-label="Navigation Links, press enter to choose one" role="group">
+<div data-de-aria-group="dynamic" tabindex="0" data-de-aria-key="g" aria-label="Navigation Links, press enter to choose one" role="group" style="position: relative;">
+    <span data-de-aria-group-enter-indicator="top-end" role="tooltip" aria-label="Press Enter to choose a link">Press Enter to choose a link</span>
     <a href="/home" data-de-aria-key="h">Home</a>
     <a href="/about" data-de-aria-key="a">About</a>
     <a href="/contact" data-de-aria-key="c">Contact</a>
@@ -297,6 +298,36 @@ You do not want to have the data-de-aria-group-exit button to appear when the gr
 }
 ```
 
+#### `data-de-aria-group-enter-indicator`
+
+Each dynamic group should define one enter indicator alongside its exit button, as a direct child of the `data-de-aria-group="dynamic"` element. The indicator explains how to enter the group; the exit button lets the user leave it after entering.
+
+```html
+<div data-de-aria-group="dynamic" tabindex="0" data-de-aria-key="g" aria-label="Navigation Links" role="group" style="position: relative;">
+    <span data-de-aria-group-enter-indicator="top-end" role="tooltip" aria-label="Press Enter to choose a link">Press Enter to choose a link</span>
+    <a href="/home" data-de-aria-key="h">Home</a>
+    <a href="/about" data-de-aria-key="a">About</a>
+    <button data-de-aria-group-exit data-de-aria-key="esc" aria-label="Go back to Navigation">x</button>
+</div>
+```
+
+Use a non-focusable element such as a `<span>` with `role="tooltip"` and an `aria-label`. Visible instruction text is optional; without it, `css/basic.css` still displays the enter-key icon. The `aria-label` is required even when visible text is present. Do not add `tabindex`, `data-de-aria-key`, or `aria-hidden` to the indicator.
+
+With `css/basic.css` loaded, the indicator displays an enter-key icon beside its text. It is visible only while its direct parent group itself has focus, and hides when focus moves to a child after entering the group. The exit button appears while the group has `data-de-aria-group-active`.
+
+The attribute selects the indicator's position:
+
+| Value | Vertical placement | Horizontal alignment |
+| --- | --- | --- |
+| `top-start` | Outside, above the group | Start edge |
+| `top-end` | Outside, above the group | End edge |
+| `bottom-start` | Outside, below the group | Start edge |
+| `bottom-end` | Outside, below the group | End edge |
+
+Start and end follow the inherited `dir` attribute: start is left in LTR and right in RTL. The indicator stays within the group's horizontal bounds, wrapping longer text, with a gap above or below the group so it does not cover the group.
+
+The parent group must have `position: relative`, `absolute`, `fixed`, or `sticky` so the indicator is positioned relative to it. The stylesheet does not change the parent's positioning. Allow overflow around the group; an ancestor with clipping overflow can hide the outside indicator.
+
 #### Dynamic groups, but text
 
 A dynamic group that doesn't need an aria label because it is already a text element
@@ -305,7 +336,8 @@ In this example below at first you can tab upon two elements, a paragraph and th
 
 ```html
 <p data-de-aria-text tabindex="0">This paragraph is tabbable and can be read by screenreaders, but if you enter the dynamic group below, the focus will shift to the group.</p>
-<p data-de-aria-group="dynamic" data-de-aria-text tabindex="0">
+<p data-de-aria-group="dynamic" data-de-aria-text tabindex="0" style="position: relative;">
+    <span data-de-aria-group-enter-indicator="top-end" role="tooltip" aria-label="Press Enter to choose a link">Press Enter to choose a link</span>
     If you need help, please contact us at <a href="/contact" data-de-aria-key="c">Contact</a> or visit our <a href="/help" data-de-aria-key="h">Help</a> page.
     <button data-de-aria-group-exit data-de-aria-key="esc" aria-label="Go back to Paragraphs">x</button>
 </p>
